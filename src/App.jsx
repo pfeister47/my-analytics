@@ -407,8 +407,12 @@ export default function App(){
     if(filters.partner!=="All"&&p.partner!==filters.partner) return false;
     if(filters.product!=="All"&&p.product!==filters.product) return false;
     if(filters.country!=="All"&&p.country!==filters.country) return false;
-    if(filters.dateFrom&&p.month&&p.month<filters.dateFrom) return false;
-    if(filters.dateTo&&p.month&&p.month>filters.dateTo) return false;
+    // Exclude projects with no valid month when a date filter is active
+    const hasDateFilter=filters.dateFrom||filters.dateTo;
+    const validMonth=p.month&&p.month!=="Unknown"&&/^\d{4}-\d{2}$/.test(p.month);
+    if(hasDateFilter&&!validMonth) return false;
+    if(filters.dateFrom&&validMonth&&p.month<filters.dateFrom) return false;
+    if(filters.dateTo&&validMonth&&p.month>filters.dateTo) return false;
     return true;
   }),[projects,filters]);
 
