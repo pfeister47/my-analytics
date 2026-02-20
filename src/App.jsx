@@ -10,14 +10,14 @@ const C = {
 const PARTNER_COLORS = ["#00d9c0","#9b7fe8","#ff5c6a","#ffc542","#4da6ff","#ff9d5c","#80e882"];
 
 // ─── Named partners — all others become "Other" ───────────────────────────────
-const NAMED_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "Grub Hub"];
+const NAMED_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
 const partnerGroup = p => NAMED_PARTNERS.includes(p) ? p : "Other";
 const CHART_PARTNERS = [...NAMED_PARTNERS, "Other"];
 const CHART_PARTNER_COLORS = {
   "Uber Eats":     "#00d9c0",
   "Uber Eats ANZ": "#9b7fe8",
   "Deliveroo":     "#ff5c6a",
-  "Grub Hub":      "#ffc542",
+  "GrubHub":      "#ffc542",
   "Other":         "#4a6080",
 };
 
@@ -29,8 +29,8 @@ const SAMPLE_DATA = [
   {id:"P004",partner:"Deliveroo",    product:"Drone Footage", country:"Canada",   numImages:80, month:"2024-02",revenue:{deliverablesApproved:2200,additionalDeliverables:200, lastMinuteReschedule:0,  travel:550, other:0},expenses:{base:900, additionalDeliverables:100,lastMinuteReschedule:0,  travel:500,other:0}},
   {id:"P005",partner:"Uber Eats ANZ",product:"Photo Session", country:"UK",       numImages:150,month:"2024-03",revenue:{deliverablesApproved:2100,additionalDeliverables:0,   lastMinuteReschedule:450,travel:650, other:0},expenses:{base:950, additionalDeliverables:0,  lastMinuteReschedule:300,travel:600,other:0}},
   {id:"P006",partner:"Uber Eats ANZ",product:"Video Package", country:"UK",       numImages:90, month:"2024-03",revenue:{deliverablesApproved:3200,additionalDeliverables:500, lastMinuteReschedule:0,  travel:780, other:0},expenses:{base:1500,additionalDeliverables:300,lastMinuteReschedule:0,  travel:700,other:0}},
-  {id:"P007",partner:"Grub Hub",     product:"Drone Footage", country:"Australia",numImages:50, month:"2024-04",revenue:{deliverablesApproved:1900,additionalDeliverables:0,   lastMinuteReschedule:0,  travel:1300,other:0},expenses:{base:700, additionalDeliverables:0,  lastMinuteReschedule:0,  travel:1200,other:0}},
-  {id:"P008",partner:"Grub Hub",     product:"Photo Session", country:"Australia",numImages:180,month:"2024-04",revenue:{deliverablesApproved:2400,additionalDeliverables:450, lastMinuteReschedule:180,travel:1000,other:0},expenses:{base:1050,additionalDeliverables:250,lastMinuteReschedule:100,travel:900,other:0}},
+  {id:"P007",partner:"GrubHub",     product:"Drone Footage", country:"Australia",numImages:50, month:"2024-04",revenue:{deliverablesApproved:1900,additionalDeliverables:0,   lastMinuteReschedule:0,  travel:1300,other:0},expenses:{base:700, additionalDeliverables:0,  lastMinuteReschedule:0,  travel:1200,other:0}},
+  {id:"P008",partner:"GrubHub",     product:"Photo Session", country:"Australia",numImages:180,month:"2024-04",revenue:{deliverablesApproved:2400,additionalDeliverables:450, lastMinuteReschedule:180,travel:1000,other:0},expenses:{base:1050,additionalDeliverables:250,lastMinuteReschedule:100,travel:900,other:0}},
   {id:"P009",partner:"Uber Eats",    product:"Photo Session", country:"USA",      numImages:135,month:"2024-05",revenue:{deliverablesApproved:1950,additionalDeliverables:220, lastMinuteReschedule:0,  travel:270, other:0},expenses:{base:850, additionalDeliverables:100,lastMinuteReschedule:0,  travel:220,other:0}},
   {id:"P010",partner:"Other Co",     product:"Video Package", country:"Canada",   numImages:75, month:"2024-05",revenue:{deliverablesApproved:3000,additionalDeliverables:300, lastMinuteReschedule:400,travel:400, other:0},expenses:{base:1300,additionalDeliverables:150,lastMinuteReschedule:250,travel:350,other:0}},
   {id:"P011",partner:"Deliveroo",    product:"Drone Footage", country:"France",   numImages:65, month:"2024-06",revenue:{deliverablesApproved:2000,additionalDeliverables:150, lastMinuteReschedule:0,  travel:900, other:0},expenses:{base:780, additionalDeliverables:80, lastMinuteReschedule:0,  travel:850,other:0}},
@@ -43,8 +43,8 @@ const REV_KEYS   = ["deliverablesApproved","additionalDeliverables","lastMinuteR
 const EXP_LABELS = {base:"Base Amount",additionalDeliverables:"Additional Deliverables",lastMinuteReschedule:"Last Minute Reschedule",travel:"Travel",other:"Other"};
 const REV_LABELS = {deliverablesApproved:"Deliverables Approved",additionalDeliverables:"Additional Deliverables",lastMinuteReschedule:"Last Minute Reschedule",travel:"Travel",other:"Other"};
 
-const totalExp = p => EXP_KEYS.reduce((s,k)=>s+(p.expenses[k]||0),0);
-const totalRev = p => REV_KEYS.reduce((s,k)=>s+(p.revenue[k]||0),0);
+const totalExp = p => EXP_KEYS.reduce((s,k)=>s+(Number(p.expenses[k])||0),0);
+const totalRev = p => REV_KEYS.reduce((s,k)=>s+(Number(p.revenue[k])||0),0);
 const calcTotals = p => {
   const te=totalExp(p),tr=totalRev(p),m=tr-te;
   return {totalExpenses:te,totalRevenue:tr,margin:m,
@@ -121,32 +121,55 @@ function RevenueByPartnerChart({projects}){
   );
 }
 
-// ─── Chart 2: Expense per Image by Product (top 10) ───────────────────────────
+// ─── Chart 2: Expense per Image by Product (top 10, grouped by partner) ─────────
 function ExpensePerImageChart({projects}){
   // Count projects per product to find top 10
   const productCounts = {};
-  projects.forEach(p=>{ productCounts[p.product]=(productCounts[p.product]||0)+1; });
-  const top10 = Object.entries(productCounts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k])=>k);
+  const productPartner = {};
+  projects.forEach(p=>{
+    productCounts[p.product]=(productCounts[p.product]||0)+1;
+    productPartner[p.product]=p.partner; // last-seen partner for sorting
+  });
+  const top10 = Object.entries(productCounts)
+    .sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k])=>k);
+
+  // Sort top10 so same-partner products are grouped together
+  top10.sort((a,b)=>{
+    const pa=productPartner[a]||"", pb=productPartner[b]||"";
+    return pa.localeCompare(pb)||a.localeCompare(b);
+  });
 
   const data=top10.map(prod=>{
     const sub=projects.filter(p=>p.product===prod);
-    const imgs=sub.reduce((s,p)=>s+p.numImages,0);
+    const imgs=sub.reduce((s,p)=>s+Number(p.numImages),0);
     if(!imgs) return null;
-    const core=sub.reduce((s,p)=>s+p.expenses.base+p.expenses.additionalDeliverables,0);
-    const vari=sub.reduce((s,p)=>s+p.expenses.lastMinuteReschedule+p.expenses.travel+p.expenses.other,0);
-    return{product:prod,"Core (Base + Add.Deliv.)":core/imgs,"Variable (LMR + Travel + Other)":vari/imgs};
+    const core=sub.reduce((s,p)=>s+Number(p.expenses.base)+Number(p.expenses.additionalDeliverables),0);
+    const vari=sub.reduce((s,p)=>s+Number(p.expenses.lastMinuteReschedule)+Number(p.expenses.travel)+Number(p.expenses.other),0);
+    const partner=productPartner[prod]||"";
+    return{product:prod,partner,label:`${prod}\n(${partner})`,"Core (Base + Add.Deliv.)":core/imgs,"Variable (LMR + Travel + Other)":vari/imgs};
   }).filter(Boolean);
 
+  const CustomXTick = ({x,y,payload})=>{
+    const item = data.find(d=>d.product===payload.value);
+    const partner = item?.partner||"";
+    return(
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={14} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{payload.value}</text>
+        <text x={0} y={0} dy={26} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily="Space Mono" opacity={0.7}>{partner}</text>
+      </g>
+    );
+  };
+
   return(
-    <div style={S.chartCard}>
+    <div style={{...S.chartCard, gridColumn:"1 / -1"}}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Expense per Image by Product</div>
-        <div style={S.chartSub}>Top 10 products · Core vs variable cost per image</div>
+        <div style={S.chartSub}>Top 10 products · grouped by partner · Core vs variable cost per image</div>
       </div>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={28}>
+      <ResponsiveContainer width="100%" height={360}>
+        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={32}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="product" tick={{fill:C.muted,fontSize:10,fontFamily:"Space Mono"}} axisLine={false} tickLine={false} interval={0}/>
+          <XAxis dataKey="product" tick={<CustomXTick/>} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
@@ -295,7 +318,16 @@ export default function App(){
     }catch(e){setSyncError(e.message);}
     finally{setSyncing(false);}
   };
-  const [filters,setFilters]=useState({partner:"All",product:"All",country:"All",dateFrom:"",dateTo:""});
+  // Default date range: 7 months ago → prior month
+  const defaultDates = useMemo(()=>{
+    const now = new Date();
+    const toDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const fromDate = new Date(now.getFullYear(), now.getMonth()-8, 1);
+    const toStr = `${toDate.getFullYear()}-${String(toDate.getMonth()+1).padStart(2,"0")}`;
+    const fromStr = `${fromDate.getFullYear()}-${String(fromDate.getMonth()+1).padStart(2,"0")}`;
+    return {from: fromStr, to: toStr};
+  },[]);
+  const [filters,setFilters]=useState({partner:"All",product:"All",country:"All",dateFrom:defaultDates.from,dateTo:defaultDates.to});
   const setFilter=(k,v)=>setFilters(f=>({...f,[k]:v}));
 
   // Build filter options from raw data
@@ -397,11 +429,11 @@ export default function App(){
         {view==="dashboard"&&(<>
           <div style={{display:"flex",gap:12,marginBottom:24,flexWrap:"wrap"}}>
             {[
-              ["Total Revenue",   fmt(totals.rev),  C.accent, `${filtered.length} projects`],
+              ["Total Revenue",   fmt(totals.rev),  C.accent, `${filtered.length.toLocaleString("en-US")} projects`],
               ["Total Expenses",  fmt(totals.exp),  C.red,    null],
               ["Gross Margin",    fmt(margin),      metricColor(marginPct), fmtP(marginPct)],
               ["Margin %",        fmtP(marginPct),  metricColor(marginPct), marginPct>=40?"✓ Healthy":marginPct>=25?"⚠ Watch":"✗ Low"],
-              ["Revenue / Image", fmtD(totals.imgs>0?totals.rev/totals.imgs:0), C.purple, `${totals.imgs.toLocaleString()} images`],
+              ["Revenue / Image", fmtD(totals.imgs>0?totals.rev/totals.imgs:0), C.purple, `${Math.round(totals.imgs).toLocaleString("en-US")} images`],
               ["Expense / Image", fmtD(totals.imgs>0?totals.exp/totals.imgs:0), C.yellow, null],
             ].map(([label,val,color,sub])=>(
               <div key={label} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"18px 22px",flex:1,minWidth:140}}>
@@ -428,9 +460,11 @@ export default function App(){
             <RevenueByPartnerChart projects={filtered}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
               <MarginByPartnerChart projects={filtered}/>
+              <TravelExpenseChart projects={filtered}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr",gap:20}}>
               <ExpensePerImageChart projects={filtered}/>
             </div>
-            <TravelExpenseChart projects={filtered}/>
           </div>
         )}
 
