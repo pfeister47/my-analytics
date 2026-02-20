@@ -186,7 +186,14 @@ function useExpPerImageData(projects){
   });
   const data=top10.map(prod=>{
     const sub=projects.filter(p=>p.product===prod&&EXP_IMAGE_CHART_PARTNERS.includes(normalizePartner(p.partner)));
-    const imgs=sub.reduce((s,p)=>s+Number(p.numImages),0);
+    // Deduplicate images by projectId to avoid counting same project multiple times across months
+    const seenIds=new Set();
+    const imgs=sub.reduce((s,p)=>{
+      const pid=p.projectId||p.id;
+      if(seenIds.has(pid)) return s;
+      seenIds.add(pid);
+      return s+Number(p.numImages);
+    },0);
     if(!imgs) return null;
     const core=sub.reduce((s,p)=>s+Number(p.expenses.base)+Number(p.expenses.additionalDeliverables),0);
     const vari=sub.reduce((s,p)=>s+Number(p.expenses.lastMinuteReschedule)+Number(p.expenses.travel)+Number(p.expenses.other),0);
@@ -203,20 +210,21 @@ function useExpPerImageData(projects){
   return {data};
 }
 
+// ─── Stable X tick for expense charts (defined outside component to avoid remount) ──
+const ExpProductTick=({x,y,payload,data})=>{
+  const item=data?.find(d=>d.product===payload.value);
+  return(
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={14} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{payload.value}</text>
+      <text x={0} y={0} dy={26} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily="Space Mono" opacity={0.7}>{item?.partner||""}</text>
+    </g>
+  );
+};
+
 // ─── Chart 2a: Expense per Image by Product (absolute $) ─────────────────────
 function ExpensePerImageChart({projects}){
   const {data}=useExpPerImageData(projects);
   const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
-  const CustomXTick=({x,y,payload})=>{
-    const item=data.find(d=>d.product===payload.value);
-    const partner=item?.partner||"";
-    return(
-      <g transform={`translate(${x},${y})`}>
-        <text x={0} y={0} dy={14} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{payload.value}</text>
-        <text x={0} y={0} dy={26} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily="Space Mono" opacity={0.7}>{partner}</text>
-      </g>
-    );
-  };
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
@@ -226,7 +234,7 @@ function ExpensePerImageChart({projects}){
       <ResponsiveContainer width="100%" height={360}>
         <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={bs}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="product" tick={<CustomXTick/>} axisLine={false} tickLine={false} interval={0}/>
+          <XAxis dataKey="product" tick={<ExpProductTick data={data}/>} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
@@ -242,16 +250,6 @@ function ExpensePerImageChart({projects}){
 function ExpensePerImagePctChart({projects}){
   const {data}=useExpPerImageData(projects);
   const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
-  const CustomXTick=({x,y,payload})=>{
-    const item=data.find(d=>d.product===payload.value);
-    const partner=item?.partner||"";
-    return(
-      <g transform={`translate(${x},${y})`}>
-        <text x={0} y={0} dy={14} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{payload.value}</text>
-        <text x={0} y={0} dy={26} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily="Space Mono" opacity={0.7}>{partner}</text>
-      </g>
-    );
-  };
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
@@ -261,7 +259,7 @@ function ExpensePerImagePctChart({projects}){
       <ResponsiveContainer width="100%" height={360}>
         <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={bs}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="product" tick={<CustomXTick/>} axisLine={false} tickLine={false} interval={0}/>
+          <XAxis dataKey="product" tick={<ExpProductTick data={data}/>} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`${v.toFixed(0)}%`} domain={[0,100]} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={v=>`${Number(v).toFixed(1)}%`}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
