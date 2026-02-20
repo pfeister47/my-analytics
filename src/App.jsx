@@ -15,15 +15,52 @@ const NAMED_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
 const IMAGE_METRIC_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub", "ezCater", "Popmenu"];
 // Partners included in Expense per Image chart
 const EXP_IMAGE_CHART_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
-const partnerGroup = p => NAMED_PARTNERS.includes(p) ? p : "Other";
-const CHART_PARTNERS = [...NAMED_PARTNERS, "Other"];
+
+// Case-insensitive partner name normalization — handles "Grubhub" vs "GrubHub" etc.
+const PARTNER_ALIASES = {
+  "grubhub": "GrubHub",
+  "uber eats": "Uber Eats",
+  "uber eats anz": "Uber Eats ANZ",
+  "deliveroo": "Deliveroo",
+  "ezcater": "ezCater",
+  "popmenu": "Popmenu",
+};
+const normalizePartner = name => {
+  if (!name) return name;
+  return PARTNER_ALIASES[name.toLowerCase()] || name;
+};
+
+// Determine how to show a partner in charts:
+// - If a specific partner filter is active and it's not in NAMED_PARTNERS, show that partner name
+// - Otherwise group non-named partners as "Other"
+const makePartnerGroupFn = (activePartnerFilter) => {
+  if (activePartnerFilter && activePartnerFilter !== "All" && !NAMED_PARTNERS.includes(activePartnerFilter)) {
+    return p => {
+      const n = normalizePartner(p);
+      return n === activePartnerFilter ? activePartnerFilter : (NAMED_PARTNERS.includes(n) ? n : "Other");
+    };
+  }
+  return p => {
+    const n = normalizePartner(p);
+    return NAMED_PARTNERS.includes(n) ? n : "Other";
+  };
+};
+
+const makeChartPartners = (activePartnerFilter) => {
+  if (activePartnerFilter && activePartnerFilter !== "All" && !NAMED_PARTNERS.includes(activePartnerFilter)) {
+    return [...NAMED_PARTNERS, activePartnerFilter, "Other"];
+  }
+  return [...NAMED_PARTNERS, "Other"];
+};
+
 const CHART_PARTNER_COLORS = {
   "Uber Eats":     "#00d9c0",
   "Uber Eats ANZ": "#9b7fe8",
   "Deliveroo":     "#ff5c6a",
-  "GrubHub":      "#ffc542",
+  "GrubHub":       "#ffc542",
   "Other":         "#4a6080",
 };
+const getPartnerColor = (name, i) => CHART_PARTNER_COLORS[name] || PARTNER_COLORS[i % PARTNER_COLORS.length];
 
 // ─── Sample Data ──────────────────────────────────────────────────────────────
 const SAMPLE_DATA = [
@@ -101,16 +138,18 @@ const ChartTooltip = ({active,payload,label,valueFormatter=fmt})=>{
 };
 
 // ─── Chart 1: Revenue by Partner by Month ────────────────────────────────────
-function RevenueByPartnerChart({projects}){
+function RevenueByPartnerChart({projects, activePartner}){
+  const partnerGroupFn = makePartnerGroupFn(activePartner);
+  const chartPartners = makeChartPartners(activePartner);
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
-    CHART_PARTNERS.forEach(pt=>{
-      row[pt]=projects.filter(p=>p.month===m&&partnerGroup(p.partner)===pt).reduce((s,p)=>s+totalRev(p),0);
+    chartPartners.forEach(pt=>{
+      row[pt]=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt).reduce((s,p)=>s+totalRev(p),0);
     });
     return row;
   });
-  const active = CHART_PARTNERS.filter(pt=>data.some(r=>r[pt]>0));
+  const active = chartPartners.filter(pt=>data.some(r=>r[pt]>0));
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
@@ -124,7 +163,7 @@ function RevenueByPartnerChart({projects}){
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={CHART_PARTNER_COLORS[pt]||PARTNER_COLORS[i%PARTNER_COLORS.length]} radius={i===active.length-1?[4,4,0,0]:[0,0,0,0]}/>)}
+          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[4,4,0,0]:[0,0,0,0]}/>)}
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -137,7 +176,7 @@ function ExpensePerImageChart({projects}){
   const productCounts = {};
   const productPartner = {};
   // Only include products from the named chart partners
-  projects.filter(p=>EXP_IMAGE_CHART_PARTNERS.includes(p.partner)).forEach(p=>{
+  projects.filter(p=>EXP_IMAGE_CHART_PARTNERS.includes(normalizePartner(p.partner))).forEach(p=>{
     productCounts[p.product]=(productCounts[p.product]||0)+1;
     productPartner[p.product]=p.partner;
   });
@@ -151,7 +190,7 @@ function ExpensePerImageChart({projects}){
   });
 
   const data=top10.map(prod=>{
-    const sub=projects.filter(p=>p.product===prod&&EXP_IMAGE_CHART_PARTNERS.includes(p.partner));
+    const sub=projects.filter(p=>p.product===prod&&EXP_IMAGE_CHART_PARTNERS.includes(normalizePartner(p.partner)));
     const imgs=sub.reduce((s,p)=>s+Number(p.numImages),0);
     if(!imgs) return null;
     const core=sub.reduce((s,p)=>s+Number(p.expenses.base)+Number(p.expenses.additionalDeliverables),0);
@@ -193,16 +232,18 @@ function ExpensePerImageChart({projects}){
 }
 
 // ─── Chart 3: Travel Expenses by Partner by Month ─────────────────────────────
-function TravelExpenseChart({projects}){
+function TravelExpenseChart({projects, activePartner}){
+  const partnerGroupFn = makePartnerGroupFn(activePartner);
+  const chartPartners = makeChartPartners(activePartner);
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
-    CHART_PARTNERS.forEach(pt=>{
-      row[pt]=projects.filter(p=>p.month===m&&partnerGroup(p.partner)===pt).reduce((s,p)=>s+(p.expenses.travel||0),0);
+    chartPartners.forEach(pt=>{
+      row[pt]=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt).reduce((s,p)=>s+(Number(p.expenses?.travel)||0),0);
     });
     return row;
   });
-  const active = CHART_PARTNERS.filter(pt=>data.some(r=>r[pt]>0));
+  const active = chartPartners.filter(pt=>data.some(r=>r[pt]>0));
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
@@ -216,7 +257,7 @@ function TravelExpenseChart({projects}){
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={CHART_PARTNER_COLORS[pt]||PARTNER_COLORS[i%PARTNER_COLORS.length]} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
+          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -224,17 +265,19 @@ function TravelExpenseChart({projects}){
 }
 
 // ─── Chart 4: Margin by Partner by Month ─────────────────────────────────────
-function MarginByPartnerChart({projects}){
+function MarginByPartnerChart({projects, activePartner}){
+  const partnerGroupFn = makePartnerGroupFn(activePartner);
+  const chartPartners = makeChartPartners(activePartner);
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
-    CHART_PARTNERS.forEach(pt=>{
-      const sub=projects.filter(p=>p.month===m&&partnerGroup(p.partner)===pt);
+    chartPartners.forEach(pt=>{
+      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
       row[pt]=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
     });
     return row;
   });
-  const active = CHART_PARTNERS.filter(pt=>data.some(r=>r[pt]!==0));
+  const active = chartPartners.filter(pt=>data.some(r=>r[pt]!==0));
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
@@ -248,7 +291,7 @@ function MarginByPartnerChart({projects}){
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={CHART_PARTNER_COLORS[pt]||PARTNER_COLORS[i%PARTNER_COLORS.length]} radius={i===active.length-1?[4,4,0,0]:[0,0,0,0]}/>)}
+          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[4,4,0,0]:[0,0,0,0]}/>)}
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -341,8 +384,16 @@ export default function App(){
   const [filters,setFilters]=useState({partner:"All",product:"All",country:"All",dateFrom:defaultDates.from,dateTo:defaultDates.to});
   const setFilter=(k,v)=>setFilters(f=>({...f,[k]:v}));
 
-  // Build filter options from raw data
-  const options=k=>["All",...new Set(projects.map(p=>p[k]))];
+  // Build filter options: alpha-sorted; country puts USA first
+  const options=k=>{
+    const vals=[...new Set(projects.map(p=>p[k]))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    if(k==="country"){
+      const usFirst=vals.filter(v=>v==="USA");
+      const rest=vals.filter(v=>v!=="USA");
+      return ["All",...usFirst,...rest];
+    }
+    return ["All",...vals];
+  };
 
   // All months available for date pickers
   const allMonths=useMemo(()=>{
@@ -366,14 +417,19 @@ export default function App(){
   },{rev:0,exp:0,imgs:0}),[filtered]);
 
   // Rev/Image and Exp/Image only count the specified named partners
-  const imgTotals=useMemo(()=>filtered.filter(p=>IMAGE_METRIC_PARTNERS.includes(p.partner)).reduce((a,p)=>{
+  const imgTotals=useMemo(()=>filtered.filter(p=>IMAGE_METRIC_PARTNERS.includes(normalizePartner(p.partner))).reduce((a,p)=>{
     const t=calcTotals(p);return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,imgs:a.imgs+(Number(p.numImages)||0)};
   },{rev:0,exp:0,imgs:0}),[filtered]);
 
   const margin=totals.rev-totals.exp,marginPct=totals.rev>0?(margin/totals.rev)*100:0;
   const hasFilters=filters.partner!=="All"||filters.product!=="All"||filters.country!=="All"||(filters.dateFrom&&filters.dateFrom!==defaultDates.from)||(filters.dateTo&&filters.dateTo!==defaultDates.to);
 
-  const handleImport=rows=>{setProjects(rows);setLastSync(new Date().toLocaleTimeString());};
+  const handleImport=rows=>{
+    // Normalize partner names on import to fix case inconsistencies (e.g. Grubhub → GrubHub)
+    const normalized = rows.map(p=>({...p, partner: normalizePartner(p.partner)}));
+    setProjects(normalized);
+    setLastSync(new Date().toLocaleTimeString());
+  };
   const deleteProject=id=>setProjects(prev=>prev.filter(p=>p.id!==id));
 
   const navBtn=(label,key)=>(
@@ -416,11 +472,14 @@ export default function App(){
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 18px",marginBottom:22,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:10,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,marginRight:4}}>FILTER:</span>
 
-            {/* Dropdowns */}
-            {["partner","product","country"].map(k=>(
-              <select key={k} style={sel} value={filters[k]} onChange={e=>setFilter(k,e.target.value)}>
-                {options(k).map(v=><option key={v}>{v}</option>)}
-              </select>
+            {/* Dropdowns with labels */}
+            {[["partner","Partner"],["product","Product"],["country","Country"]].map(([k,label])=>(
+              <div key={k} style={{display:"flex",flexDirection:"column",gap:3}}>
+                <span style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,textTransform:"uppercase"}}>{label}</span>
+                <select style={sel} value={filters[k]} onChange={e=>setFilter(k,e.target.value)}>
+                  {options(k).map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
             ))}
 
             {/* Date range */}
@@ -478,10 +537,10 @@ export default function App(){
         {/* ── CHARTS ── */}
         {view==="charts"&&(
           <div style={{display:"flex",flexDirection:"column",gap:20}}>
-            <RevenueByPartnerChart projects={filtered}/>
+            <RevenueByPartnerChart projects={filtered} activePartner={filters.partner}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-              <MarginByPartnerChart projects={filtered}/>
-              <TravelExpenseChart projects={filtered}/>
+              <MarginByPartnerChart projects={filtered} activePartner={filters.partner}/>
+              <TravelExpenseChart projects={filtered} activePartner={filters.partner}/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr",gap:20}}>
               <ExpensePerImageChart projects={filtered}/>
