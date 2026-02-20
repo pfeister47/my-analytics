@@ -11,6 +11,10 @@ const PARTNER_COLORS = ["#00d9c0","#9b7fe8","#ff5c6a","#ffc542","#4da6ff","#ff9d
 
 // ─── Named partners — all others become "Other" ───────────────────────────────
 const NAMED_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
+// Partners included in Rev/Image and Exp/Image KPI cards
+const IMAGE_METRIC_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub", "ezCater", "Popmenu"];
+// Partners included in Expense per Image chart
+const EXP_IMAGE_CHART_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
 const partnerGroup = p => NAMED_PARTNERS.includes(p) ? p : "Other";
 const CHART_PARTNERS = [...NAMED_PARTNERS, "Other"];
 const CHART_PARTNER_COLORS = {
@@ -43,8 +47,14 @@ const REV_KEYS   = ["deliverablesApproved","additionalDeliverables","lastMinuteR
 const EXP_LABELS = {base:"Base Amount",additionalDeliverables:"Additional Deliverables",lastMinuteReschedule:"Last Minute Reschedule",travel:"Travel",other:"Other"};
 const REV_LABELS = {deliverablesApproved:"Deliverables Approved",additionalDeliverables:"Additional Deliverables",lastMinuteReschedule:"Last Minute Reschedule",travel:"Travel",other:"Other"};
 
-const totalExp = p => EXP_KEYS.reduce((s,k)=>s+(Number(p.expenses[k])||0),0);
-const totalRev = p => REV_KEYS.reduce((s,k)=>s+(Number(p.revenue[k])||0),0);
+const totalExp = p => {
+  if (!p.expenses) return 0;
+  return Object.values(p.expenses).reduce((s,v)=>s+(Number(v)||0),0);
+};
+const totalRev = p => {
+  if (!p.revenue) return 0;
+  return Object.values(p.revenue).reduce((s,v)=>s+(Number(v)||0),0);
+};
 const calcTotals = p => {
   const te=totalExp(p),tr=totalRev(p),m=tr-te;
   return {totalExpenses:te,totalRevenue:tr,margin:m,
@@ -126,9 +136,10 @@ function ExpensePerImageChart({projects}){
   // Count projects per product to find top 10
   const productCounts = {};
   const productPartner = {};
-  projects.forEach(p=>{
+  // Only include products from the named chart partners
+  projects.filter(p=>EXP_IMAGE_CHART_PARTNERS.includes(p.partner)).forEach(p=>{
     productCounts[p.product]=(productCounts[p.product]||0)+1;
-    productPartner[p.product]=p.partner; // last-seen partner for sorting
+    productPartner[p.product]=p.partner;
   });
   const top10 = Object.entries(productCounts)
     .sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k])=>k);
@@ -140,7 +151,7 @@ function ExpensePerImageChart({projects}){
   });
 
   const data=top10.map(prod=>{
-    const sub=projects.filter(p=>p.product===prod);
+    const sub=projects.filter(p=>p.product===prod&&EXP_IMAGE_CHART_PARTNERS.includes(p.partner));
     const imgs=sub.reduce((s,p)=>s+Number(p.numImages),0);
     if(!imgs) return null;
     const core=sub.reduce((s,p)=>s+Number(p.expenses.base)+Number(p.expenses.additionalDeliverables),0);
@@ -334,7 +345,12 @@ export default function App(){
   const options=k=>["All",...new Set(projects.map(p=>p[k]))];
 
   // All months available for date pickers
-  const allMonths=useMemo(()=>[...new Set(projects.map(p=>p.month))].filter(Boolean).sort(),[projects]);
+  const allMonths=useMemo(()=>{
+    const fromData=[...new Set(projects.map(p=>p.month))].filter(Boolean);
+    // Include default dates so they always appear as options even before data loads
+    const merged=[...new Set([...fromData, defaultDates.from, defaultDates.to])].filter(Boolean).sort();
+    return merged;
+  },[projects, defaultDates]);
 
   const filtered=useMemo(()=>projects.filter(p=>{
     if(filters.partner!=="All"&&p.partner!==filters.partner) return false;
@@ -346,11 +362,16 @@ export default function App(){
   }),[projects,filters]);
 
   const totals=useMemo(()=>filtered.reduce((a,p)=>{
-    const t=calcTotals(p);return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,imgs:a.imgs+p.numImages};
+    const t=calcTotals(p);return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,imgs:a.imgs+(Number(p.numImages)||0)};
+  },{rev:0,exp:0,imgs:0}),[filtered]);
+
+  // Rev/Image and Exp/Image only count the specified named partners
+  const imgTotals=useMemo(()=>filtered.filter(p=>IMAGE_METRIC_PARTNERS.includes(p.partner)).reduce((a,p)=>{
+    const t=calcTotals(p);return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,imgs:a.imgs+(Number(p.numImages)||0)};
   },{rev:0,exp:0,imgs:0}),[filtered]);
 
   const margin=totals.rev-totals.exp,marginPct=totals.rev>0?(margin/totals.rev)*100:0;
-  const hasFilters=filters.partner!=="All"||filters.product!=="All"||filters.country!=="All"||filters.dateFrom||filters.dateTo;
+  const hasFilters=filters.partner!=="All"||filters.product!=="All"||filters.country!=="All"||(filters.dateFrom&&filters.dateFrom!==defaultDates.from)||(filters.dateTo&&filters.dateTo!==defaultDates.to);
 
   const handleImport=rows=>{setProjects(rows);setLastSync(new Date().toLocaleTimeString());};
   const deleteProject=id=>setProjects(prev=>prev.filter(p=>p.id!==id));
@@ -416,7 +437,7 @@ export default function App(){
             </select>
 
             {hasFilters&&(
-              <button onClick={()=>setFilters({partner:"All",product:"All",country:"All",dateFrom:"",dateTo:""})}
+              <button onClick={()=>setFilters({partner:"All",product:"All",country:"All",dateFrom:defaultDates.from,dateTo:defaultDates.to})}
                 style={{background:"transparent",color:C.red,border:"none",cursor:"pointer",fontSize:12,fontFamily:"'Space Mono',monospace",marginLeft:4}}>
                 Clear all ×
               </button>
@@ -433,8 +454,8 @@ export default function App(){
               ["Total Expenses",  fmt(totals.exp),  C.red,    null],
               ["Gross Margin",    fmt(margin),      metricColor(marginPct), fmtP(marginPct)],
               ["Margin %",        fmtP(marginPct),  metricColor(marginPct), marginPct>=40?"✓ Healthy":marginPct>=25?"⚠ Watch":"✗ Low"],
-              ["Revenue / Image", fmtD(totals.imgs>0?totals.rev/totals.imgs:0), C.purple, `${Math.round(totals.imgs).toLocaleString("en-US")} images`],
-              ["Expense / Image", fmtD(totals.imgs>0?totals.exp/totals.imgs:0), C.yellow, null],
+              ["Revenue / Image", fmtD(imgTotals.imgs>0?imgTotals.rev/imgTotals.imgs:0), C.purple, `${Math.round(imgTotals.imgs).toLocaleString("en-US")} images`],
+              ["Expense / Image", fmtD(imgTotals.imgs>0?imgTotals.exp/imgTotals.imgs:0), C.yellow, `named partners only`],
             ].map(([label,val,color,sub])=>(
               <div key={label} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"18px 22px",flex:1,minWidth:140}}>
                 <div style={{fontSize:10,fontFamily:"'Space Mono',monospace",color:C.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>{label}</div>
