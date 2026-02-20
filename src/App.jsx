@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -176,7 +176,7 @@ function useExpPerImageData(projects){
   const productCounts={}, productPartner={};
   projects.filter(p=>EXP_IMAGE_CHART_PARTNERS.includes(normalizePartner(p.partner))).forEach(p=>{
     productCounts[p.product]=(productCounts[p.product]||0)+1;
-    productPartner[p.product]=normalizePartner(p.partner);
+    productPartner[p.product]=p.partner;
   });
   const top10=Object.entries(productCounts)
     .filter(([,c])=>c>=10).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k])=>k);
@@ -200,67 +200,73 @@ function useExpPerImageData(projects){
       "Variable %": total>0?(vari/total)*100:0,
     };
   }).filter(Boolean);
-  return {data, productPartner};
+  return {data};
 }
-
 
 // ─── Chart 2a: Expense per Image by Product (absolute $) ─────────────────────
 function ExpensePerImageChart({projects}){
-  const {data,productPartner}=useExpPerImageData(projects);
+  const {data}=useExpPerImageData(projects);
   const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
-  // Each bar gets its partner's color for Core; Variable is a lighter tint
-  const coreColor=prod=>CHART_PARTNER_COLORS[productPartner[prod]]||C.muted;
-  const varColor=prod=>{const c=coreColor(prod);return c+"99";};
+  const CustomXTick=({x,y,payload})=>{
+    const item=data.find(d=>d.product===payload.value);
+    const partner=item?.partner||"";
+    return(
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={14} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{payload.value}</text>
+        <text x={0} y={0} dy={26} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily="Space Mono" opacity={0.7}>{partner}</text>
+      </g>
+    );
+  };
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Expense per Image by Product</div>
-        <div style={S.chartSub}>Top 10 products ≥10 projects · Core vs variable cost per image</div>
+        <div style={S.chartSub}>Top 10 products ≥10 projects · grouped by partner · Core vs variable cost per image</div>
       </div>
-      <ResponsiveContainer width="100%" height={340}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:20}} barSize={bs}>
+      <ResponsiveContainer width="100%" height={360}>
+        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={bs}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="product" tick={{fill:C.muted,fontSize:10,fontFamily:"Space Mono"}} axisLine={false} tickLine={false} interval={0}/>
+          <XAxis dataKey="product" tick={<CustomXTick/>} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          <Bar dataKey="Core (Base + Add.Deliv.)" stackId="a" radius={[0,0,0,0]}>
-            {data.map((entry,i)=><Cell key={i} fill={coreColor(entry.product)}/>)}
-          </Bar>
-          <Bar dataKey="Variable (LMR + Travel + Other)" stackId="a" radius={[4,4,0,0]}>
-            {data.map((entry,i)=><Cell key={i} fill={varColor(entry.product)}/>)}
-          </Bar>
+          <Bar dataKey="Core (Base + Add.Deliv.)" stackId="a" fill={C.accent} radius={[0,0,0,0]}/>
+          <Bar dataKey="Variable (LMR + Travel + Other)" stackId="a" fill={C.yellow} radius={[4,4,0,0]}/>
         </BarChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-// ─── Chart 2b: Expense per Image — 100% stacked ───────────────────────────────
+// ─── Chart 2b: Expense Mix by Product — 100% stacked ─────────────────────────
 function ExpensePerImagePctChart({projects}){
-  const {data,productPartner}=useExpPerImageData(projects);
+  const {data}=useExpPerImageData(projects);
   const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
-  const coreColor=prod=>CHART_PARTNER_COLORS[productPartner[prod]]||C.muted;
-  const varColor=prod=>{const c=coreColor(prod);return c+"99";};
+  const CustomXTick=({x,y,payload})=>{
+    const item=data.find(d=>d.product===payload.value);
+    const partner=item?.partner||"";
+    return(
+      <g transform={`translate(${x},${y})`}>
+        <text x={0} y={0} dy={14} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{payload.value}</text>
+        <text x={0} y={0} dy={26} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily="Space Mono" opacity={0.7}>{partner}</text>
+      </g>
+    );
+  };
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Expense Mix by Product</div>
         <div style={S.chartSub}>Core vs variable as % of total expense per image</div>
       </div>
-      <ResponsiveContainer width="100%" height={340}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:20}} barSize={bs}>
+      <ResponsiveContainer width="100%" height={360}>
+        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={bs}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="product" tick={{fill:C.muted,fontSize:10,fontFamily:"Space Mono"}} axisLine={false} tickLine={false} interval={0}/>
+          <XAxis dataKey="product" tick={<CustomXTick/>} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`${v.toFixed(0)}%`} domain={[0,100]} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={v=>`${Number(v).toFixed(1)}%`}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          <Bar dataKey="Core %" stackId="a" radius={[0,0,0,0]}>
-            {data.map((entry,i)=><Cell key={i} fill={coreColor(entry.product)}/>)}
-          </Bar>
-          <Bar dataKey="Variable %" stackId="a" radius={[4,4,0,0]}>
-            {data.map((entry,i)=><Cell key={i} fill={varColor(entry.product)}/>)}
-          </Bar>
+          <Bar dataKey="Core %" stackId="a" fill={C.accent} radius={[0,0,0,0]}/>
+          <Bar dataKey="Variable %" stackId="a" fill={C.yellow} radius={[4,4,0,0]}/>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -382,12 +388,16 @@ function GroupedAnalysis({data,groupBy}){
     }).sort((a,b)=>b.rev-a.rev);
   },[data,groupBy]);
   const maxRev=Math.max(...grouped.map(g=>g.rev),1);
-  // Average rev/img and exp/img across all groups — used for relative coloring
-  const avgRevPerImg=grouped.length>0?grouped.reduce((s,g)=>s+g.revPerImg,0)/grouped.length:0;
-  const avgExpPerImg=grouped.length>0?grouped.reduce((s,g)=>s+g.expPerImg,0)/grouped.length:0;
-  // Rev/Img: green if above avg, yellow if close, red if below
+  // Overall Rev/Img and Exp/Img from named partners only — matches KPI card baseline
+  const namedProjs=data.filter(p=>IMAGE_METRIC_PARTNERS.includes(normalizePartner(p.partner)));
+  const _nRev=namedProjs.reduce((s,p)=>{const t=calcTotals(p);return s+t.totalRevenue;},0);
+  const _nExp=namedProjs.reduce((s,p)=>{const t=calcTotals(p);return s+t.totalExpenses;},0);
+  const _nImgs=namedProjs.reduce((s,p)=>s+(Number(p.numImages)||0),0);
+  const avgRevPerImg=_nImgs>0?_nRev/_nImgs:0;
+  const avgExpPerImg=_nImgs>0?_nExp/_nImgs:0;
+  // Rev/Img: green if above avg, yellow if within 15% below, red if further below
   const revImgColor=v=>v>=avgRevPerImg*1.05?C.accent:v>=avgRevPerImg*0.85?C.yellow:C.red;
-  // Exp/Img: green if below avg (cheaper), yellow if close, red if above (expensive)
+  // Exp/Img: green if below avg (cheaper=good), yellow if within 15% above, red if higher
   const expImgColor=v=>v<=avgExpPerImg*0.95?C.accent:v<=avgExpPerImg*1.15?C.yellow:C.red;
   return(
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
