@@ -41,18 +41,14 @@ const COUNTRY_MAP = {
   "sg": "Singapore", "singapore": "Singapore",
   "ie": "Ireland", "ireland": "Ireland",
 };
-const normalizeCountry = raw => {
-  if (!raw) return raw;
-  return COUNTRY_MAP[raw.trim().toLowerCase()] || raw.trim();
-};
+const normalizeCountry = raw => COUNTRY_MAP[(raw||"").trim().toLowerCase()] || (raw||"").trim();
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 function getAuth() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY environment variable is not set.");
-  const creds = JSON.parse(raw);
   return new google.auth.GoogleAuth({
-    credentials: creds,
+    credentials: JSON.parse(raw),
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });
 }
@@ -69,23 +65,23 @@ async function fetchTab(sheets, spreadsheetId, tabName) {
   });
 }
 
-// ─── Extract spreadsheet ID from URL ─────────────────────────────────────────
 function extractSheetId(url) {
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (!match) throw new Error("Invalid Google Sheets URL.");
   return match[1];
 }
 
-// ─── Build YYYY-MM from a date string ────────────────────────────────────────
+// ─── Parse MM/DD/YYYY explicitly to avoid JS Date ambiguity ──────────────────
 function toYearMonth(dateStr) {
   if (!dateStr) return null;
-  let d = new Date(dateStr);
-  if (isNaN(d.getTime())) {
-    const parts = dateStr.split("/");
-    if (parts.length === 3) d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-  }
-  if (isNaN(d.getTime())) return null;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const s = dateStr.trim();
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[1]}-${iso[2]}`;
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slash) return `${slash[3]}-${String(slash[1]).padStart(2,"0")}`;
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  return null;
 }
 
 // ─── Main Handler ─────────────────────────────────────────────────────────────
@@ -109,53 +105,82 @@ export default async function handler(req, res) {
       fetchTab(sheets, spreadsheetId, "Expenses"),
     ]);
 
-    const projects = {};
-
-    const ensureProject = (row, dateStr) => {
-      const id = row["Project Id"] || row["Project ID"] || row["project_id"];
+    // ── Build project map for metadata (partner, product, country, images) ───
+    const projectMeta = {};
+    const ensureMeta = (row, dateStr) => {
+      const id = String(row["Project Id"] || row["Project ID"] || "").trim();
       if (!id) return null;
-      if (!projects[id]) {
-        projects[id] = {
-          id,
-          partner:   row["Partner"] || "",
-          product:   row["Package"] || "",
-          country:   normalizeCountry(row["Country"] || ""),
+      if (!projectMeta[id]) {
+        projectMeta[id] = {
+          partner: row["Partner"] || "",
+          product: row["Package"] || "",
+          country: normalizeCountry(row["Country"] || ""),
           numImages: 0,
-          month:     toYearMonth(dateStr) || "Unknown",
-          revenue:   { deliverablesApproved:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 },
-          expenses:  { base:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 },
         };
       }
+      const imgs = parseFloat(row["Images"] || "0");
+      if (!isNaN(imgs) && imgs > projectMeta[id].numImages) projectMeta[id].numImages = imgs;
       return id;
     };
 
+    // ── Revenue: one record per project+month combination ────────────────────
+    // Key: "projectId|YYYY-MM"
+    const revenueByProjectMonth = {};
     for (const row of revenueRows) {
-      const id = ensureProject(row, row["Revenue Date"] || "");
+      const id = ensureMeta(row, row["Revenue Date"]);
       if (!id) continue;
-      const imgs = parseFloat(row["Images"] || "0");
-      if (!isNaN(imgs) && imgs > projects[id].numImages) projects[id].numImages = imgs;
+      const month = toYearMonth(row["Revenue Date"]) || "Unknown";
+      const key = `${id}|${month}`;
+      if (!revenueByProjectMonth[key]) {
+        revenueByProjectMonth[key] = { id, month, revenue: { deliverablesApproved:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 } };
+      }
       const lineItem = (row["Revenue Line Item"] || "").trim().toLowerCase();
       const mappedKey = REVENUE_MAP[lineItem];
       if (mappedKey) {
         const amount = parseFloat((row["Revenue Amount"] || "0").replace(/[$,]/g, "")) || 0;
-        projects[id].revenue[mappedKey] += amount;
+        revenueByProjectMonth[key].revenue[mappedKey] += amount;
       }
     }
 
+    // ── Expenses: one record per project+month combination ───────────────────
+    const expensesByProjectMonth = {};
     for (const row of expenseRows) {
-      const id = ensureProject(row, row["Expense Date"] || "");
+      const id = ensureMeta(row, row["Expense Date"]);
       if (!id) continue;
-      const imgs = parseFloat(row["Images"] || "0");
-      if (!isNaN(imgs) && imgs > projects[id].numImages) projects[id].numImages = imgs;
+      const month = toYearMonth(row["Expense Date"]) || "Unknown";
+      const key = `${id}|${month}`;
+      if (!expensesByProjectMonth[key]) {
+        expensesByProjectMonth[key] = { id, month, expenses: { base:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 } };
+      }
       const lineItem = (row["Expense Line Item"] || "").trim().toLowerCase();
       const mappedKey = EXPENSE_MAP[lineItem];
       if (mappedKey) {
         const amount = parseFloat((row["Expense Amount"] || "0").replace(/[$,]/g, "")) || 0;
-        projects[id].expenses[mappedKey] += amount;
+        expensesByProjectMonth[key].expenses[mappedKey] += amount;
       }
     }
 
-    const result = Object.values(projects);
+    // ── Merge into final project+month records ────────────────────────────────
+    const allKeys = new Set([...Object.keys(revenueByProjectMonth), ...Object.keys(expensesByProjectMonth)]);
+    const result = [];
+    for (const key of allKeys) {
+      const [id, month] = key.split("|");
+      const meta = projectMeta[id] || { partner:"", product:"", country:"", numImages:0 };
+      const rev = revenueByProjectMonth[key]?.revenue || { deliverablesApproved:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 };
+      const exp = expensesByProjectMonth[key]?.expenses || { base:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 };
+      result.push({
+        id: `${id}_${month}`,  // unique key per project+month
+        projectId: id,
+        partner: meta.partner,
+        product: meta.product,
+        country: meta.country,
+        numImages: meta.numImages,
+        month,
+        revenue: rev,
+        expenses: exp,
+      });
+    }
+
     return res.status(200).json({ projects: result, count: result.length });
 
   } catch (err) {
