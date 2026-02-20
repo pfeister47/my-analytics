@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -203,38 +203,33 @@ function useExpPerImageData(projects){
   return {data, productPartner};
 }
 
-// ─── Custom X tick showing product + partner color dot ───────────────────────
-function ExpXTick({x,y,payload,productPartner}){
-  const partner=productPartner[payload.value]||"";
-  const color=CHART_PARTNER_COLORS[partner]||C.muted;
-  return(
-    <g transform={`translate(${x},${y})`}>
-      <circle cx={0} cy={6} r={4} fill={color}/>
-      <text x={0} y={0} dy={20} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{payload.value}</text>
-      <text x={0} y={0} dy={32} textAnchor="middle" fill={color} fontSize={9} fontFamily="Space Mono" opacity={0.85}>{partner}</text>
-    </g>
-  );
-}
 
 // ─── Chart 2a: Expense per Image by Product (absolute $) ─────────────────────
 function ExpensePerImageChart({projects}){
   const {data,productPartner}=useExpPerImageData(projects);
   const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
+  // Each bar gets its partner's color for Core; Variable is a lighter tint
+  const coreColor=prod=>CHART_PARTNER_COLORS[productPartner[prod]]||C.muted;
+  const varColor=prod=>{const c=coreColor(prod);return c+"99";};
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Expense per Image by Product</div>
         <div style={S.chartSub}>Top 10 products ≥10 projects · Core vs variable cost per image</div>
       </div>
-      <ResponsiveContainer width="100%" height={360}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:44}} barSize={bs}>
+      <ResponsiveContainer width="100%" height={340}>
+        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:20}} barSize={bs}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="product" tick={<ExpXTick productPartner={productPartner}/>} axisLine={false} tickLine={false} interval={0}/>
+          <XAxis dataKey="product" tick={{fill:C.muted,fontSize:10,fontFamily:"Space Mono"}} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          <Bar dataKey="Core (Base + Add.Deliv.)" stackId="a" fill={C.accent} radius={[0,0,0,0]}/>
-          <Bar dataKey="Variable (LMR + Travel + Other)" stackId="a" fill={C.yellow} radius={[4,4,0,0]}/>
+          <Bar dataKey="Core (Base + Add.Deliv.)" stackId="a" radius={[0,0,0,0]}>
+            {data.map((entry,i)=><Cell key={i} fill={coreColor(entry.product)}/>)}
+          </Bar>
+          <Bar dataKey="Variable (LMR + Travel + Other)" stackId="a" radius={[4,4,0,0]}>
+            {data.map((entry,i)=><Cell key={i} fill={varColor(entry.product)}/>)}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -245,21 +240,27 @@ function ExpensePerImageChart({projects}){
 function ExpensePerImagePctChart({projects}){
   const {data,productPartner}=useExpPerImageData(projects);
   const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
+  const coreColor=prod=>CHART_PARTNER_COLORS[productPartner[prod]]||C.muted;
+  const varColor=prod=>{const c=coreColor(prod);return c+"99";};
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Expense Mix by Product</div>
         <div style={S.chartSub}>Core vs variable as % of total expense per image</div>
       </div>
-      <ResponsiveContainer width="100%" height={360}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:44}} barSize={bs}>
+      <ResponsiveContainer width="100%" height={340}>
+        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:20}} barSize={bs}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="product" tick={<ExpXTick productPartner={productPartner}/>} axisLine={false} tickLine={false} interval={0}/>
+          <XAxis dataKey="product" tick={{fill:C.muted,fontSize:10,fontFamily:"Space Mono"}} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`${v.toFixed(0)}%`} domain={[0,100]} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={v=>`${Number(v).toFixed(1)}%`}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          <Bar dataKey="Core %" stackId="a" fill={C.accent} radius={[0,0,0,0]}/>
-          <Bar dataKey="Variable %" stackId="a" fill={C.yellow} radius={[4,4,0,0]}/>
+          <Bar dataKey="Core %" stackId="a" radius={[0,0,0,0]}>
+            {data.map((entry,i)=><Cell key={i} fill={coreColor(entry.product)}/>)}
+          </Bar>
+          <Bar dataKey="Variable %" stackId="a" radius={[4,4,0,0]}>
+            {data.map((entry,i)=><Cell key={i} fill={varColor(entry.product)}/>)}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -375,12 +376,19 @@ function GroupedAnalysis({data,groupBy}){
     const map={};
     data.forEach(p=>{const k=p[groupBy];(map[k]=map[k]||[]).push(p);});
     return Object.entries(map).map(([key,ps])=>{
-      const agg=ps.reduce((a,p)=>{const t=calcTotals(p);return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,imgs:a.imgs+p.numImages,cnt:a.cnt+1};},{rev:0,exp:0,imgs:0,cnt:0});
+      const agg=ps.reduce((a,p)=>{const t=calcTotals(p);return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,imgs:a.imgs+(Number(p.numImages)||0),cnt:a.cnt+1};},{rev:0,exp:0,imgs:0,cnt:0});
       const margin=agg.rev-agg.exp,mp=agg.rev>0?(margin/agg.rev)*100:0;
       return{key,...agg,margin,marginPct:mp,revPerImg:agg.imgs>0?agg.rev/agg.imgs:0,expPerImg:agg.imgs>0?agg.exp/agg.imgs:0};
     }).sort((a,b)=>b.rev-a.rev);
   },[data,groupBy]);
   const maxRev=Math.max(...grouped.map(g=>g.rev),1);
+  // Average rev/img and exp/img across all groups — used for relative coloring
+  const avgRevPerImg=grouped.length>0?grouped.reduce((s,g)=>s+g.revPerImg,0)/grouped.length:0;
+  const avgExpPerImg=grouped.length>0?grouped.reduce((s,g)=>s+g.expPerImg,0)/grouped.length:0;
+  // Rev/Img: green if above avg, yellow if close, red if below
+  const revImgColor=v=>v>=avgRevPerImg*1.05?C.accent:v>=avgRevPerImg*0.85?C.yellow:C.red;
+  // Exp/Img: green if below avg (cheaper), yellow if close, red if above (expensive)
+  const expImgColor=v=>v<=avgExpPerImg*0.95?C.accent:v<=avgExpPerImg*1.15?C.yellow:C.red;
   return(
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {grouped.map((g,i)=>(
@@ -394,7 +402,13 @@ function GroupedAnalysis({data,groupBy}){
               <span style={{fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{g.cnt} project{g.cnt!==1?"s":""}</span>
             </div>
             <div style={{display:"flex",gap:20}}>
-              {[["REVENUE",fmt(g.rev),C.accent],["EXPENSES",fmt(g.exp),C.red],["MARGIN",fmtP(g.marginPct),metricColor(g.marginPct)],["REV/IMG",fmtD(g.revPerImg),C.purple],["EXP/IMG",fmtD(g.expPerImg),C.yellow]].map(([label,val,color])=>(
+              {[
+                ["REVENUE",  fmt(g.rev),           C.blue],
+                ["EXPENSES", fmt(g.exp),            C.red],
+                ["MARGIN",   fmtP(g.marginPct),     metricColor(g.marginPct)],
+                ["REV/IMG",  fmtD(g.revPerImg),     revImgColor(g.revPerImg)],
+                ["EXP/IMG",  fmtD(g.expPerImg),     expImgColor(g.expPerImg)],
+              ].map(([label,val,color])=>(
                 <div key={label} style={{textAlign:"right"}}>
                   <div style={{fontSize:10,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{label}</div>
                   <div style={{color,fontWeight:700,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>{val}</div>
