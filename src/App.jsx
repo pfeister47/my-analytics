@@ -157,7 +157,7 @@ function RevenueByPartnerChart({projects, activePartner}){
         <div style={S.chartSub}>Monthly stacked breakdown</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}}>
+        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
@@ -218,7 +218,7 @@ function ExpensePerImageChart({projects}){
         <div style={S.chartSub}>Top 10 products with ≥10 projects · grouped by partner · Core vs variable cost per image</div>
       </div>
       <ResponsiveContainer width="100%" height={360}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))))}  >
+        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))))}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="product" tick={<CustomXTick/>} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
@@ -286,7 +286,7 @@ function MarginByPartnerChart({projects, activePartner}){
         <div style={S.chartSub}>Monthly revenue minus expenses by partner</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}}>
+        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
