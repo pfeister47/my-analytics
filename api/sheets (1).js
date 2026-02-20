@@ -1,36 +1,52 @@
 import { google } from "googleapis";
 
-// ─── Line Item Mappings ───────────────────────────────────────────────────────
+// ─── Line Item Mappings (all keys lowercased for case-insensitive matching) ───
 
 const REVENUE_MAP = {
-  "Additional Deliverables": "additionalDeliverables",
-  "Additional Location":     "additionalDeliverables",
-  "Creative Removed":        "other",
-  "Deliverables approved":   "deliverablesApproved",
-  "Extra Time On Site":      "additionalDeliverables",
-  "Fewer Deliverables":      "additionalDeliverables",
-  "File":                    "other",
-  "Last Minute Reschedule":  "lastMinuteReschedule",
-  "Other":                   "other",
-  "Project Cancelled":       "other",
-  "Project Ordered":         "other",
-  "Travel":                  "travel",
+  "additional deliverables": "additionalDeliverables",
+  "additional location":     "additionalDeliverables",
+  "creative removed":        "other",
+  "deliverables approved":   "deliverablesApproved",
+  "extra time on site":      "additionalDeliverables",
+  "fewer deliverables":      "additionalDeliverables",
+  "file":                    "other",
+  "last minute reschedule":  "lastMinuteReschedule",
+  "other":                   "other",
+  "project cancelled":       "other",
+  "project ordered":         "deliverablesApproved",
+  "travel":                  "travel",
 };
 
 const EXPENSE_MAP = {
-  "Base Amount":              "base",
-  "Additional Deliverables":  "additionalDeliverables",
-  "Last Minute Reschedule":   "lastMinuteReschedule",
-  "Travel":                   "travel",
-  "\\N":                      "lastMinuteReschedule",
-  "Other":                    "other",
-  "Additional Location":      "additionalDeliverables",
-  "Extra Time On Site":       "additionalDeliverables",
-  "Fewer Deliverables":       "additionalDeliverables",
+  "base amount":             "base",
+  "additional deliverables": "additionalDeliverables",
+  "last minute reschedule":  "lastMinuteReschedule",
+  "travel":                  "travel",
+  "\\n":                     "lastMinuteReschedule",
+  "other":                   "other",
+  "additional location":     "additionalDeliverables",
+  "extra time on site":      "additionalDeliverables",
+  "fewer deliverables":      "additionalDeliverables",
+};
+
+// ─── Country normalisation ────────────────────────────────────────────────────
+const COUNTRY_MAP = {
+  "us": "USA", "usa": "USA", "united states": "USA",
+  "au": "Australia", "australia": "Australia",
+  "uk": "UK", "gb": "UK", "united kingdom": "UK",
+  "ca": "Canada", "canada": "Canada",
+  "nz": "New Zealand", "new zealand": "New Zealand",
+  "de": "Germany", "germany": "Germany",
+  "fr": "France", "france": "France",
+  "sg": "Singapore", "singapore": "Singapore",
+  "ie": "Ireland", "ireland": "Ireland",
+};
+const normalizeCountry = raw => {
+  if (!raw) return raw;
+  return COUNTRY_MAP[raw.trim().toLowerCase()] || raw.trim();
 };
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-
 function getAuth() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
   if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_KEY environment variable is not set.");
@@ -42,12 +58,8 @@ function getAuth() {
 }
 
 // ─── Fetch a full tab as array of row objects ─────────────────────────────────
-
 async function fetchTab(sheets, spreadsheetId, tabName) {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: tabName,
-  });
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: tabName });
   const [headers, ...rows] = res.data.values || [];
   if (!headers) return [];
   return rows.map(row => {
@@ -58,7 +70,6 @@ async function fetchTab(sheets, spreadsheetId, tabName) {
 }
 
 // ─── Extract spreadsheet ID from URL ─────────────────────────────────────────
-
 function extractSheetId(url) {
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (!match) throw new Error("Invalid Google Sheets URL.");
@@ -66,13 +77,10 @@ function extractSheetId(url) {
 }
 
 // ─── Build YYYY-MM from a date string ────────────────────────────────────────
-
 function toYearMonth(dateStr) {
   if (!dateStr) return null;
-  // Handle common formats: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY
   let d = new Date(dateStr);
   if (isNaN(d.getTime())) {
-    // Try DD/MM/YYYY
     const parts = dateStr.split("/");
     if (parts.length === 3) d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
   }
@@ -81,9 +89,7 @@ function toYearMonth(dateStr) {
 }
 
 // ─── Main Handler ─────────────────────────────────────────────────────────────
-
 export default async function handler(req, res) {
-  // CORS headers so the browser app can call this
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -98,14 +104,11 @@ export default async function handler(req, res) {
     const auth = getAuth();
     const sheets = google.sheets({ version: "v4", auth });
 
-    // ── Fetch both tabs ──────────────────────────────────────────────────────
     const [revenueRows, expenseRows] = await Promise.all([
       fetchTab(sheets, spreadsheetId, "Revenue"),
       fetchTab(sheets, spreadsheetId, "Expenses"),
     ]);
 
-    // ── Index projects by Project Id ─────────────────────────────────────────
-    // We build a map: projectId -> project object
     const projects = {};
 
     const ensureProject = (row, dateStr) => {
@@ -114,65 +117,41 @@ export default async function handler(req, res) {
       if (!projects[id]) {
         projects[id] = {
           id,
-          partner: row["Partner"] || "",
-          product: row["Package"]  || "",
-          country: row["Country"]  || "",
+          partner:   row["Partner"] || "",
+          product:   row["Package"] || "",
+          country:   normalizeCountry(row["Country"] || ""),
           numImages: 0,
-          month: toYearMonth(dateStr) || "Unknown",
-          revenue: {
-            deliverablesApproved:   0,
-            additionalDeliverables: 0,
-            lastMinuteReschedule:   0,
-            travel:                 0,
-            other:                  0,
-          },
-          expenses: {
-            base:                   0,
-            additionalDeliverables: 0,
-            lastMinuteReschedule:   0,
-            travel:                 0,
-            other:                  0,
-          },
+          month:     toYearMonth(dateStr) || "Unknown",
+          revenue:   { deliverablesApproved:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 },
+          expenses:  { base:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 },
         };
       }
       return id;
     };
 
-    // ── Process Revenue rows ─────────────────────────────────────────────────
     for (const row of revenueRows) {
-      const dateStr = row["Revenue Date"] || "";
-      const id = ensureProject(row, dateStr);
+      const id = ensureProject(row, row["Revenue Date"] || "");
       if (!id) continue;
-
-      // Images
       const imgs = parseFloat(row["Images"] || "0");
       if (!isNaN(imgs) && imgs > projects[id].numImages) projects[id].numImages = imgs;
-
-      // Map line item
-      const lineItem = row["Revenue Line Item"] || "";
+      const lineItem = (row["Revenue Line Item"] || "").trim().toLowerCase();
       const mappedKey = REVENUE_MAP[lineItem];
       if (mappedKey) {
         const amount = parseFloat((row["Revenue Amount"] || "0").replace(/[$,]/g, "")) || 0;
-        projects[id].revenue[mappedKey] = (projects[id].revenue[mappedKey] || 0) + amount;
+        projects[id].revenue[mappedKey] += amount;
       }
     }
 
-    // ── Process Expense rows ─────────────────────────────────────────────────
     for (const row of expenseRows) {
-      const dateStr = row["Expense Date"] || "";
-      const id = ensureProject(row, dateStr);
+      const id = ensureProject(row, row["Expense Date"] || "");
       if (!id) continue;
-
-      // Images (take max across both tabs)
       const imgs = parseFloat(row["Images"] || "0");
       if (!isNaN(imgs) && imgs > projects[id].numImages) projects[id].numImages = imgs;
-
-      // Map line item
-      const lineItem = row["Expense Line Item"] || "";
-      const mappedKey = EXPENSE_MAP[lineItem] || EXPENSE_MAP[lineItem.trim()];
+      const lineItem = (row["Expense Line Item"] || "").trim().toLowerCase();
+      const mappedKey = EXPENSE_MAP[lineItem];
       if (mappedKey) {
         const amount = parseFloat((row["Expense Amount"] || "0").replace(/[$,]/g, "")) || 0;
-        projects[id].expenses[mappedKey] = (projects[id].expenses[mappedKey] || 0) + amount;
+        projects[id].expenses[mappedKey] += amount;
       }
     }
 
