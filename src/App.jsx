@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -252,7 +252,7 @@ function TravelExpenseChart({projects, activePartner}){
         <div style={S.chartSub}>Monthly travel costs by partner</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={28}>
+        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
@@ -373,6 +373,8 @@ export default function App(){
     }catch(e){setSyncError(e.message);}
     finally{setSyncing(false);}
   };
+  // Auto-sync on first load
+  useEffect(()=>{syncSheets();},[]);
   // Default date range: 7 months ago → prior month
   const defaultDates = useMemo(()=>{
     const now = new Date();
@@ -386,8 +388,12 @@ export default function App(){
   const setFilter=(k,v)=>setFilters(f=>({...f,[k]:v}));
 
   // Build filter options: alpha-sorted; country puts USA first
+  // Product and Country are filtered to match selected Partner
   const options=k=>{
-    const vals=[...new Set(projects.map(p=>p[k]))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+    const source = (k==="product"||k==="country") && filters.partner!=="All"
+      ? projects.filter(p=>p.partner===filters.partner)
+      : projects;
+    const vals=[...new Set(source.map(p=>p[k]))].filter(Boolean).sort((a,b)=>a.localeCompare(b));
     if(k==="country"){
       const usFirst=vals.filter(v=>v==="USA");
       const rest=vals.filter(v=>v!=="USA");
@@ -395,6 +401,15 @@ export default function App(){
     }
     return ["All",...vals];
   };
+
+  // Reset product/country if they're no longer valid for the selected partner
+  useEffect(()=>{
+    if(filters.partner==="All") return;
+    const validProducts=new Set(projects.filter(p=>p.partner===filters.partner).map(p=>p.product));
+    const validCountries=new Set(projects.filter(p=>p.partner===filters.partner).map(p=>p.country));
+    if(filters.product!=="All"&&!validProducts.has(filters.product)) setFilter("product","All");
+    if(filters.country!=="All"&&!validCountries.has(filters.country)) setFilter("country","All");
+  },[filters.partner, projects]);
 
   // All months available for date pickers
   const allMonths=useMemo(()=>{
