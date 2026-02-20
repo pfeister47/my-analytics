@@ -157,7 +157,7 @@ function RevenueByPartnerChart({projects, activePartner}){
         <div style={S.chartSub}>Monthly stacked breakdown</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={28}>
+        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
@@ -181,6 +181,7 @@ function ExpensePerImageChart({projects}){
     productPartner[p.product]=p.partner;
   });
   const top10 = Object.entries(productCounts)
+    .filter(([,count])=>count>=10)
     .sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k])=>k);
 
   // Sort top10 so same-partner products are grouped together
@@ -214,10 +215,10 @@ function ExpensePerImageChart({projects}){
     <div style={{...S.chartCard, gridColumn:"1 / -1"}}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Expense per Image by Product</div>
-        <div style={S.chartSub}>Top 10 products · grouped by partner · Core vs variable cost per image</div>
+        <div style={S.chartSub}>Top 10 products with ≥10 projects · grouped by partner · Core vs variable cost per image</div>
       </div>
       <ResponsiveContainer width="100%" height={360}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={32}>
+        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))))}  >
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="product" tick={<CustomXTick/>} axisLine={false} tickLine={false} interval={0}/>
           <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
@@ -285,7 +286,7 @@ function MarginByPartnerChart({projects, activePartner}){
         <div style={S.chartSub}>Monthly revenue minus expenses by partner</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={28}>
+        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
@@ -459,7 +460,6 @@ export default function App(){
         <div style={{display:"flex",gap:2,alignItems:"center"}}>
           {navBtn("Dashboard","dashboard")}
           {navBtn("Charts","charts")}
-          {navBtn("Projects","projects")}
           <div style={{width:1,height:20,background:C.border,margin:"0 8px"}}/>
           <button onClick={syncSheets} disabled={syncing} style={{background:`${C.purple}20`,color:C.purple,border:`1px solid ${C.purple}40`,borderRadius:8,padding:"7px 16px",fontWeight:600,cursor:syncing?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:13,display:"flex",alignItems:"center",gap:6,opacity:syncing?0.7:1}}>
             <span style={{display:"inline-block",animation:syncing?"spin 1s linear infinite":"none"}}>⟳</span>
@@ -473,39 +473,52 @@ export default function App(){
 
         {/* ── Filter Bar ── */}
         {["dashboard","charts","projects"].includes(view)&&(
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"14px 18px",marginBottom:22,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:10,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,marginRight:4}}>FILTER:</span>
-
-            {/* Dropdowns with labels */}
-            {[["partner","Partner"],["product","Product"],["country","Country"]].map(([k,label])=>(
-              <div key={k} style={{display:"flex",flexDirection:"column",gap:3}}>
-                <span style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,textTransform:"uppercase"}}>{label}</span>
-                <select style={sel} value={filters[k]} onChange={e=>setFilter(k,e.target.value)}>
-                  {options(k).map(v=><option key={v}>{v}</option>)}
-                </select>
-              </div>
-            ))}
-
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"10px 16px",marginBottom:22,display:"flex",gap:8,alignItems:"center",flexWrap:"nowrap",overflowX:"auto"}}>
+            {/* Partner */}
+            <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:0}}>
+              <span style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap"}}>Partner</span>
+              <select style={{...sel,padding:"5px 8px",fontSize:11}} value={filters.partner} onChange={e=>setFilter("partner",e.target.value)}>
+                {options("partner").map(v=><option key={v}>{v}</option>)}
+              </select>
+            </div>
+            {/* Product */}
+            <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:0,flex:1}}>
+              <span style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap"}}>Product</span>
+              <select style={{...sel,padding:"5px 8px",fontSize:11,width:"100%"}} value={filters.product} onChange={e=>setFilter("product",e.target.value)}>
+                {options("product").map(v=><option key={v}>{v}</option>)}
+              </select>
+            </div>
+            {/* Country */}
+            <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:0}}>
+              <span style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap"}}>Country</span>
+              <select style={{...sel,padding:"5px 8px",fontSize:11}} value={filters.country} onChange={e=>setFilter("country",e.target.value)}>
+                {options("country").map(v=><option key={v}>{v}</option>)}
+              </select>
+            </div>
+            <div style={{width:1,height:32,background:C.border,flexShrink:0}}/>
             {/* Date range */}
-            <div style={{width:1,height:20,background:C.border,margin:"0 4px"}}/>
-            <span style={{fontSize:10,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1}}>DATE:</span>
-            <select style={dateInp} value={filters.dateFrom} onChange={e=>setFilter("dateFrom",e.target.value)}>
-              <option value="">From…</option>
-              {allMonths.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}
-            </select>
-            <span style={{color:C.muted,fontSize:12}}>→</span>
-            <select style={dateInp} value={filters.dateTo} onChange={e=>setFilter("dateTo",e.target.value)}>
-              <option value="">To…</option>
-              {allMonths.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}
-            </select>
-
+            <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:0}}>
+              <span style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap"}}>From</span>
+              <select style={{...sel,padding:"5px 8px",fontSize:11}} value={filters.dateFrom} onChange={e=>setFilter("dateFrom",e.target.value)}>
+                <option value="">From…</option>
+                {allMonths.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}
+              </select>
+            </div>
+            <span style={{color:C.muted,fontSize:11,flexShrink:0,marginTop:14}}>→</span>
+            <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:0}}>
+              <span style={{fontSize:9,color:C.muted,fontFamily:"'Space Mono',monospace",letterSpacing:1,textTransform:"uppercase",whiteSpace:"nowrap"}}>To</span>
+              <select style={{...sel,padding:"5px 8px",fontSize:11}} value={filters.dateTo} onChange={e=>setFilter("dateTo",e.target.value)}>
+                <option value="">To…</option>
+                {allMonths.map(m=><option key={m} value={m}>{fmtMonth(m)}</option>)}
+              </select>
+            </div>
             {hasFilters&&(
               <button onClick={()=>setFilters({partner:"All",product:"All",country:"All",dateFrom:defaultDates.from,dateTo:defaultDates.to})}
-                style={{background:"transparent",color:C.red,border:"none",cursor:"pointer",fontSize:12,fontFamily:"'Space Mono',monospace",marginLeft:4}}>
-                Clear all ×
+                style={{background:"transparent",color:C.red,border:"none",cursor:"pointer",fontSize:11,fontFamily:"'Space Mono',monospace",flexShrink:0,marginTop:14,whiteSpace:"nowrap"}}>
+                Clear ×
               </button>
             )}
-            <span style={{marginLeft:"auto",fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{filtered.length} / {projects.length} projects</span>
+            <span style={{marginLeft:"auto",fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace",flexShrink:0,whiteSpace:"nowrap",marginTop:14}}>{filtered.length} / {projects.length}</span>
           </div>
         )}
 
