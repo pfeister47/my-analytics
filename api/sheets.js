@@ -132,9 +132,13 @@ export default async function handler(req, res) {
       const month = toYearMonth(row["Revenue Date"]) || "Unknown";
       const key = `${id}|${month}`;
       if (!revenueByProjectMonth[key]) {
-        revenueByProjectMonth[key] = { id, month, revenue: { deliverablesApproved:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 } };
+        revenueByProjectMonth[key] = { id, month, approvals:0, revenue: { deliverablesApproved:0, additionalDeliverables:0, lastMinuteReschedule:0, travel:0, other:0 } };
       }
       const lineItem = (row["Revenue Line Item"] || "").trim().toLowerCase();
+      // Count "Deliverables approved" rows as the approval denominator
+      if (lineItem === "deliverables approved") {
+        revenueByProjectMonth[key].approvals += 1;
+      }
       const mappedKey = REVENUE_MAP[lineItem];
       if (mappedKey) {
         const amount = parseFloat((row["Revenue Amount"] || "0").replace(/[$,]/g, "")) || 0;
@@ -176,6 +180,7 @@ export default async function handler(req, res) {
         country: meta.country,
         numImages: meta.numImages,
         month,
+        approvals: revenueByProjectMonth[key]?.approvals || 0,
         revenue: rev,
         expenses: exp,
       });

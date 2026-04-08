@@ -182,7 +182,8 @@ function TravelExpenseChart({projects, activePartner}){
     chartPartners.forEach(pt=>{
       const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
       const total=sub.reduce((s,p)=>s+(Number(p.expenses?.travel)||0),0);
-      row[pt]=sub.length>0?total/sub.length:0;
+      const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+      row[pt]=approvals>0?total/approvals:0;
     });
     return row;
   });
@@ -217,7 +218,8 @@ function LMRExpenseChart({projects, activePartner}){
     chartPartners.forEach(pt=>{
       const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
       const total=sub.reduce((s,p)=>s+(Number(p.expenses?.lastMinuteReschedule)||0),0);
-      row[pt]=sub.length>0?total/sub.length:0;
+      const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+      row[pt]=approvals>0?total/approvals:0;
     });
     return row;
   });
@@ -286,8 +288,9 @@ function AvgRevenuePerApprovalChart({projects, activePartner}){
     const row={month:fmtMonth(m)};
     chartPartners.forEach(pt=>{
       const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-      const total=sub.reduce((s,p)=>s+totalRev(p),0);
-      row[pt]=sub.length>0?total/sub.length:0;
+      const totalRevenue=sub.reduce((s,p)=>s+totalRev(p),0);
+      const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+      row[pt]=approvals>0?totalRevenue/approvals:0;
     });
     return row;
   });
@@ -321,8 +324,9 @@ function AvgMarginPerApprovalChart({projects, activePartner}){
     const row={month:fmtMonth(m)};
     chartPartners.forEach(pt=>{
       const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-      const total=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
-      row[pt]=sub.length>0?total/sub.length:0;
+      const totalMargin=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
+      const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+      row[pt]=approvals>0?totalMargin/approvals:0;
     });
     return row;
   });
