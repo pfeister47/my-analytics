@@ -414,59 +414,100 @@ const SHEET_URL = "https://docs.google.com/spreadsheets/d/1JmvTv2QP1INdgvLIAoYBl
 
 // ─── Grouped Analysis ─────────────────────────────────────────────────────────
 function GroupedAnalysis({data,groupBy}){
+  const [sortCol,setSortCol]=useState("rev");
+  const [sortDir,setSortDir]=useState("desc");
+
   const grouped=useMemo(()=>{
     const map={};
     data.forEach(p=>{const k=p[groupBy];(map[k]=map[k]||[]).push(p);});
     return Object.entries(map).map(([key,ps])=>{
-      const agg=ps.reduce((a,p)=>{const t=calcTotals(p);return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,imgs:a.imgs+(Number(p.numImages)||0),cnt:a.cnt+1};},{rev:0,exp:0,imgs:0,cnt:0});
+      const agg=ps.reduce((a,p)=>{
+        const t=calcTotals(p);
+        return{rev:a.rev+t.totalRevenue,exp:a.exp+t.totalExpenses,
+               imgs:a.imgs+(Number(p.numImages)||0),cnt:a.cnt+1,
+               approvals:a.approvals+(Number(p.approvals)||0)};
+      },{rev:0,exp:0,imgs:0,cnt:0,approvals:0});
       const margin=agg.rev-agg.exp,mp=agg.rev>0?(margin/agg.rev)*100:0;
-      return{key,...agg,margin,marginPct:mp,revPerImg:agg.imgs>0?agg.rev/agg.imgs:0,expPerImg:agg.imgs>0?agg.exp/agg.imgs:0};
-    }).sort((a,b)=>b.rev-a.rev);
+      const marginPerApproval=agg.approvals>0?margin/agg.approvals:0;
+      const revPerApproval=agg.approvals>0?agg.rev/agg.approvals:0;
+      return{key,...agg,margin,marginPct:mp,
+        revPerImg:agg.imgs>0?agg.rev/agg.imgs:0,
+        expPerImg:agg.imgs>0?agg.exp/agg.imgs:0,
+        marginPerApproval, revPerApproval};
+    });
   },[data,groupBy]);
-  const maxRev=Math.max(...grouped.map(g=>g.rev),1);
-  // Overall Rev/Img and Exp/Img from named partners only — matches KPI card baseline
+
+  const sorted=useMemo(()=>[...grouped].sort((a,b)=>{
+    const v=sortDir==="asc"?a[sortCol]-b[sortCol]:b[sortCol]-a[sortCol];
+    return v===0?a.key.localeCompare(b.key):v;
+  }),[grouped,sortCol,sortDir]);
+
   const namedProjs=data.filter(p=>IMAGE_METRIC_PARTNERS.includes(normalizePartner(p.partner)));
   const _nRev=namedProjs.reduce((s,p)=>{const t=calcTotals(p);return s+t.totalRevenue;},0);
   const _nExp=namedProjs.reduce((s,p)=>{const t=calcTotals(p);return s+t.totalExpenses;},0);
   const _nImgs=namedProjs.reduce((s,p)=>s+(Number(p.numImages)||0),0);
   const avgRevPerImg=_nImgs>0?_nRev/_nImgs:0;
   const avgExpPerImg=_nImgs>0?_nExp/_nImgs:0;
-  // Rev/Img: green if above avg, yellow if within 15% below, red if further below
   const revImgColor=v=>v>=avgRevPerImg*1.05?C.accent:v>=avgRevPerImg*0.85?C.yellow:C.red;
-  // Exp/Img: green if below avg (cheaper=good), yellow if within 15% above, red if higher
   const expImgColor=v=>v<=avgExpPerImg*0.95?C.accent:v<=avgExpPerImg*1.15?C.yellow:C.red;
+
+  const handleSort=col=>{
+    if(col===sortCol) setSortDir(d=>d==="asc"?"desc":"asc");
+    else{setSortCol(col);setSortDir("desc");}
+  };
+
+  const thStyle=(col)=>({
+    padding:"10px 14px", textAlign:"right", fontSize:10,
+    fontFamily:"'Space Mono',monospace", letterSpacing:1,
+    color:sortCol===col?C.accent:C.muted,
+    cursor:"pointer", userSelect:"none", whiteSpace:"nowrap",
+    borderBottom:`2px solid ${sortCol===col?C.accent:C.border}`,
+    background:C.bg,
+  });
+  const thFirst={...thStyle(null),textAlign:"left",color:C.muted,cursor:"default",borderBottom:`2px solid ${C.border}`};
+  const tdStyle={padding:"10px 14px",textAlign:"right",fontSize:13,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",borderBottom:`1px solid ${C.border}`};
+  const tdFirst={...tdStyle,textAlign:"left",fontWeight:700,color:C.text};
+
+  const cols=[
+    {key:"rev",      label:"REVENUE",          fmt:g=>fmt(g.rev),              color:()=>C.blue},
+    {key:"exp",      label:"EXPENSES",          fmt:g=>fmt(g.exp),              color:()=>C.red},
+    {key:"margin",   label:"TOTAL MARGIN",      fmt:g=>fmt(g.margin),           color:g=>metricColor(g.marginPct)},
+    {key:"revPerApproval", label:"AVG REV / APPR", fmt:g=>fmtD(g.revPerApproval), color:()=>C.text},
+    {key:"marginPerApproval", label:"$ MARGIN / APPR", fmt:g=>fmtD(g.marginPerApproval), color:g=>metricColor(g.marginPct)},
+    {key:"marginPct",label:"% MARGIN",          fmt:g=>fmtP(g.marginPct),      color:g=>metricColor(g.marginPct)},
+    {key:"revPerImg",label:"REV / IMG",          fmt:g=>fmtD(g.revPerImg),      color:g=>revImgColor(g.revPerImg)},
+    {key:"expPerImg",label:"EXP / IMG",          fmt:g=>fmtD(g.expPerImg),      color:g=>expImgColor(g.expPerImg)},
+    {key:"approvals",label:"APPROVALS",          fmt:g=>g.approvals.toLocaleString("en-US"), color:()=>C.text},
+  ];
+
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {grouped.map((g,i)=>(
-        <div key={g.key} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:10,padding:"16px 20px",transition:"border-color 0.2s"}}
-          onMouseEnter={e=>e.currentTarget.style.borderColor=C.borderHover}
-          onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:10,height:10,borderRadius:2,background:PARTNER_COLORS[i%PARTNER_COLORS.length]}}/>
-              <span style={{fontWeight:700,color:C.text,fontSize:15,fontFamily:"'DM Sans',sans-serif"}}>{g.key}</span>
-              <span style={{fontSize:11,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{g.cnt} project{g.cnt!==1?"s":""}</span>
-            </div>
-            <div style={{display:"flex",gap:20}}>
-              {[
-                ["REVENUE",  fmt(g.rev),           C.blue],
-                ["EXPENSES", fmt(g.exp),            C.red],
-                ["MARGIN",   fmtP(g.marginPct),     metricColor(g.marginPct)],
-                ["REV/IMG",  fmtD(g.revPerImg),     revImgColor(g.revPerImg)],
-                ["EXP/IMG",  fmtD(g.expPerImg),     expImgColor(g.expPerImg)],
-              ].map(([label,val,color])=>(
-                <div key={label} style={{textAlign:"right"}}>
-                  <div style={{fontSize:10,color:C.muted,fontFamily:"'Space Mono',monospace"}}>{label}</div>
-                  <div style={{color,fontWeight:700,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>{val}</div>
-                </div>
+    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:900}}>
+          <thead>
+            <tr>
+              <th style={thFirst}>{groupBy.toUpperCase()}</th>
+              {cols.map(c=>(
+                <th key={c.key} style={thStyle(c.key)} onClick={()=>handleSort(c.key)}>
+                  {c.label}{sortCol===c.key?(sortDir==="asc"?" ↑":" ↓"):""}
+                </th>
               ))}
-            </div>
-          </div>
-          <div style={{background:C.bg,borderRadius:3,height:5,overflow:"hidden"}}>
-            <div style={{width:`${(g.rev/maxRev)*100}%`,height:"100%",background:PARTNER_COLORS[i%PARTNER_COLORS.length],borderRadius:3,transition:"width 0.6s ease"}}/>
-          </div>
-        </div>
-      ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((g,i)=>(
+              <tr key={g.key} style={{background:i%2===0?C.card:C.bg}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.accentDim}
+                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.card:C.bg}>
+                <td style={tdFirst}>{g.key}</td>
+                {cols.map(c=>(
+                  <td key={c.key} style={{...tdStyle,color:c.color(g),fontWeight:600}}>{c.fmt(g)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
