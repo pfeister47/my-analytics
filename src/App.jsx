@@ -434,7 +434,7 @@ function GroupedAnalysis({data,groupBy}){
         revPerImg:agg.imgs>0?agg.rev/agg.imgs:0,
         expPerImg:agg.imgs>0?agg.exp/agg.imgs:0,
         marginPerApproval, revPerApproval};
-    });
+    }).filter(g=>g.approvals>=10);
   },[data,groupBy]);
 
   const sorted=useMemo(()=>[...grouped].sort((a,b)=>{
@@ -468,12 +468,24 @@ function GroupedAnalysis({data,groupBy}){
   const tdStyle={padding:"10px 14px",textAlign:"right",fontSize:13,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",borderBottom:`1px solid ${C.border}`};
   const tdFirst={...tdStyle,textAlign:"left",fontWeight:700,color:C.text};
 
+  // Rank-based coloring: top third green, middle third orange, bottom third red
+  const rankColor=(col)=>{
+    const vals=sorted.map(g=>g[col]).filter(v=>v!=null);
+    if(vals.length<2) return ()=>C.text;
+    const sorted_vals=[...vals].sort((a,b)=>a-b);
+    const lo=sorted_vals[Math.floor(sorted_vals.length*0.33)];
+    const hi=sorted_vals[Math.floor(sorted_vals.length*0.66)];
+    return v=>v>=hi?C.accent:v>=lo?C.yellow:C.red;
+  };
+  const revApprColor=rankColor("revPerApproval");
+  const marginApprColor=rankColor("marginPerApproval");
+
   const cols=[
     {key:"rev",      label:"REVENUE",          fmt:g=>fmt(g.rev),              color:()=>C.text},
     {key:"exp",      label:"EXPENSES",          fmt:g=>fmt(g.exp),              color:()=>C.text},
     {key:"margin",   label:"TOTAL MARGIN",      fmt:g=>fmt(g.margin),           color:()=>C.text},
-    {key:"revPerApproval", label:"AVG REV / APPR", fmt:g=>fmtD(g.revPerApproval), color:g=>metricColor(g.marginPct)},
-    {key:"marginPerApproval", label:"$ MARGIN / APPR", fmt:g=>fmtD(g.marginPerApproval), color:g=>metricColor(g.marginPct)},
+    {key:"revPerApproval", label:"AVG REV / APPR", fmt:g=>fmtD(g.revPerApproval), color:g=>revApprColor(g.revPerApproval)},
+    {key:"marginPerApproval", label:"$ MARGIN / APPR", fmt:g=>fmtD(g.marginPerApproval), color:g=>marginApprColor(g.marginPerApproval)},
     {key:"marginPct",label:"% MARGIN",          fmt:g=>fmtP(g.marginPct),      color:g=>metricColor(g.marginPct)},
     {key:"revPerImg",label:"REV / IMG",          fmt:g=>fmtD(g.revPerImg),      color:g=>revImgColor(g.revPerImg)},
     {key:"expPerImg",label:"EXP / IMG",          fmt:g=>fmtD(g.expPerImg),      color:g=>expImgColor(g.expPerImg)},
