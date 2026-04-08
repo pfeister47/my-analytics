@@ -469,10 +469,10 @@ function GroupedAnalysis({data,groupBy}){
   const tdFirst={...tdStyle,textAlign:"left",fontWeight:700,color:C.text};
 
   const cols=[
-    {key:"rev",      label:"REVENUE",          fmt:g=>fmt(g.rev),              color:()=>C.blue},
-    {key:"exp",      label:"EXPENSES",          fmt:g=>fmt(g.exp),              color:()=>C.red},
-    {key:"margin",   label:"TOTAL MARGIN",      fmt:g=>fmt(g.margin),           color:g=>metricColor(g.marginPct)},
-    {key:"revPerApproval", label:"AVG REV / APPR", fmt:g=>fmtD(g.revPerApproval), color:()=>C.text},
+    {key:"rev",      label:"REVENUE",          fmt:g=>fmt(g.rev),              color:()=>C.text},
+    {key:"exp",      label:"EXPENSES",          fmt:g=>fmt(g.exp),              color:()=>C.text},
+    {key:"margin",   label:"TOTAL MARGIN",      fmt:g=>fmt(g.margin),           color:()=>C.text},
+    {key:"revPerApproval", label:"AVG REV / APPR", fmt:g=>fmtD(g.revPerApproval), color:g=>metricColor(g.marginPct)},
     {key:"marginPerApproval", label:"$ MARGIN / APPR", fmt:g=>fmtD(g.marginPerApproval), color:g=>metricColor(g.marginPct)},
     {key:"marginPct",label:"% MARGIN",          fmt:g=>fmtP(g.marginPct),      color:g=>metricColor(g.marginPct)},
     {key:"revPerImg",label:"REV / IMG",          fmt:g=>fmtD(g.revPerImg),      color:g=>revImgColor(g.revPerImg)},
