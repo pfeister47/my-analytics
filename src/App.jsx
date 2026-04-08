@@ -85,9 +85,11 @@ const REV_KEYS   = ["deliverablesApproved","additionalDeliverables","lastMinuteR
 const EXP_LABELS = {base:"Base Amount",additionalDeliverables:"Additional Deliverables",lastMinuteReschedule:"Last Minute Reschedule",travel:"Travel",other:"Other"};
 const REV_LABELS = {deliverablesApproved:"Deliverables Approved",additionalDeliverables:"Additional Deliverables",lastMinuteReschedule:"Last Minute Reschedule",travel:"Travel",other:"Other"};
 
+const POST_PROD_RATE = 0.25;
+const postProd = p => (Number(p.numImages)||0) * POST_PROD_RATE;
 const totalExp = p => {
   if (!p.expenses) return 0;
-  return Object.values(p.expenses).reduce((s,v)=>s+(Number(v)||0),0);
+  return Object.values(p.expenses).reduce((s,v)=>s+(Number(v)||0),0) + postProd(p);
 };
 const totalRev = p => {
   if (!p.revenue) return 0;
@@ -154,7 +156,7 @@ function RevenueByPartnerChart({projects, activePartner}){
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Revenue by Partner</div>
+        <div style={S.chartTitle}>Total Revenue</div>
         <div style={S.chartSub}>Monthly stacked breakdown</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
@@ -174,25 +176,32 @@ function RevenueByPartnerChart({projects, activePartner}){
 
 // ─── Chart 3: Avg Travel Expense per Approval by Partner by Month ────────────
 function TravelExpenseChart({projects, activePartner}){
-  const partnerGroupFn = makePartnerGroupFn(activePartner);
-  const chartPartners = makeChartPartners(activePartner);
+  const isFiltered = activePartner && activePartner !== "All";
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
-    chartPartners.forEach(pt=>{
-      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-      const total=sub.reduce((s,p)=>s+(Number(p.expenses?.travel)||0),0);
+    if(isFiltered){
+      const partnerGroupFn=makePartnerGroupFn(activePartner);
+      makeChartPartners(activePartner).forEach(pt=>{
+        const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+        const val=sub.reduce((s,p)=>s+(Number(p.expenses?.travel)||0),0);
+        const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+        row[pt]=approvals>0?val/approvals:0;
+      });
+    } else {
+      const sub=projects.filter(p=>p.month===m);
+      const val=sub.reduce((s,p)=>s+(Number(p.expenses?.travel)||0),0);
       const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
-      row[pt]=approvals>0?total/approvals:0;
-    });
+      row["Company-wide"]=approvals>0?val/approvals:0;
+    }
     return row;
   });
-  const active = chartPartners.filter(pt=>data.some(r=>r[pt]>0));
+  const active=isFiltered ? makeChartPartners(activePartner).filter(pt=>data.some(r=>r[pt]>0)) : ["Company-wide"];
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Avg Travel Expense per Approval</div>
-        <div style={S.chartSub}>Monthly average travel cost per project approval by partner</div>
+        <div style={S.chartSub}>Monthly average travel cost per approval</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}>
@@ -210,25 +219,32 @@ function TravelExpenseChart({projects, activePartner}){
 
 // ─── Chart 5: Avg LMR Expense per Approval by Partner by Month ───────────────
 function LMRExpenseChart({projects, activePartner}){
-  const partnerGroupFn = makePartnerGroupFn(activePartner);
-  const chartPartners = makeChartPartners(activePartner);
+  const isFiltered = activePartner && activePartner !== "All";
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
-    chartPartners.forEach(pt=>{
-      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-      const total=sub.reduce((s,p)=>s+(Number(p.expenses?.lastMinuteReschedule)||0),0);
+    if(isFiltered){
+      const partnerGroupFn=makePartnerGroupFn(activePartner);
+      makeChartPartners(activePartner).forEach(pt=>{
+        const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+        const val=sub.reduce((s,p)=>s+(Number(p.expenses?.lastMinuteReschedule)||0),0);
+        const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+        row[pt]=approvals>0?val/approvals:0;
+      });
+    } else {
+      const sub=projects.filter(p=>p.month===m);
+      const val=sub.reduce((s,p)=>s+(Number(p.expenses?.lastMinuteReschedule)||0),0);
       const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
-      row[pt]=approvals>0?total/approvals:0;
-    });
+      row["Company-wide"]=approvals>0?val/approvals:0;
+    }
     return row;
   });
-  const active=chartPartners.filter(pt=>data.some(r=>r[pt]>0));
+  const active=isFiltered ? makeChartPartners(activePartner).filter(pt=>data.some(r=>r[pt]>0)) : ["Company-wide"];
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Avg LMR Expense per Approval</div>
-        <div style={S.chartSub}>Monthly average last minute reschedule cost per project approval by partner</div>
+        <div style={S.chartSub}>Monthly average LMR cost per approval</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
@@ -261,7 +277,7 @@ function MarginByPartnerChart({projects, activePartner}){
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Margin by Partner</div>
+        <div style={S.chartTitle}>Total Margin</div>
         <div style={S.chartSub}>Monthly revenue minus expenses by partner</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
@@ -281,25 +297,32 @@ function MarginByPartnerChart({projects, activePartner}){
 
 // ─── Chart 7: Avg Revenue per Approval by Partner by Month ───────────────────
 function AvgRevenuePerApprovalChart({projects, activePartner}){
-  const partnerGroupFn = makePartnerGroupFn(activePartner);
-  const chartPartners = makeChartPartners(activePartner);
+  const isFiltered = activePartner && activePartner !== "All";
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
-    chartPartners.forEach(pt=>{
-      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-      const totalRevenue=sub.reduce((s,p)=>s+totalRev(p),0);
+    if(isFiltered){
+      const partnerGroupFn=makePartnerGroupFn(activePartner);
+      makeChartPartners(activePartner).forEach(pt=>{
+        const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+        const val=sub.reduce((s,p)=>s+totalRev(p),0);
+        const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+        row[pt]=approvals>0?val/approvals:0;
+      });
+    } else {
+      const sub=projects.filter(p=>p.month===m);
+      const val=sub.reduce((s,p)=>s+totalRev(p),0);
       const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
-      row[pt]=approvals>0?totalRevenue/approvals:0;
-    });
+      row["Company-wide"]=approvals>0?val/approvals:0;
+    }
     return row;
   });
-  const active=chartPartners.filter(pt=>data.some(r=>r[pt]>0));
+  const active=isFiltered ? makeChartPartners(activePartner).filter(pt=>data.some(r=>r[pt]>0)) : ["Company-wide"];
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Avg Revenue per Approval</div>
-        <div style={S.chartSub}>Monthly average revenue per project approval by partner</div>
+        <div style={S.chartSub}>Monthly average revenue per approval</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
@@ -317,25 +340,32 @@ function AvgRevenuePerApprovalChart({projects, activePartner}){
 
 // ─── Chart 8: Avg Margin per Approval by Partner by Month ────────────────────
 function AvgMarginPerApprovalChart({projects, activePartner}){
-  const partnerGroupFn = makePartnerGroupFn(activePartner);
-  const chartPartners = makeChartPartners(activePartner);
+  const isFiltered = activePartner && activePartner !== "All";
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
-    chartPartners.forEach(pt=>{
-      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-      const totalMargin=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
+    if(isFiltered){
+      const partnerGroupFn=makePartnerGroupFn(activePartner);
+      makeChartPartners(activePartner).forEach(pt=>{
+        const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+        const val=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
+        const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
+        row[pt]=approvals>0?val/approvals:0;
+      });
+    } else {
+      const sub=projects.filter(p=>p.month===m);
+      const val=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
       const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
-      row[pt]=approvals>0?totalMargin/approvals:0;
-    });
+      row["Company-wide"]=approvals>0?val/approvals:0;
+    }
     return row;
   });
-  const active=chartPartners.filter(pt=>data.some(r=>r[pt]!==0));
+  const active=isFiltered ? makeChartPartners(activePartner).filter(pt=>data.some(r=>r[pt]!==0)) : ["Company-wide"];
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
         <div style={S.chartTitle}>Avg Margin per Approval</div>
-        <div style={S.chartSub}>Monthly average margin per project approval by partner</div>
+        <div style={S.chartSub}>Monthly average margin per approval</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
@@ -426,7 +456,7 @@ const S={
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App(){
   const [projects,setProjects]=useState(SAMPLE_DATA);
-  const [view,setView]=useState("dashboard");
+  const [view,setView]=useState("charts");
   const [groupBy,setGroupBy]=useState("partner");
   const [lastSync,setLastSync]=useState(null);
   const [syncing,setSyncing]=useState(false);
@@ -442,8 +472,8 @@ export default function App(){
     }catch(e){setSyncError(e.message);}
     finally{setSyncing(false);}
   };
-  // Auto-sync on first load
-  useEffect(()=>{syncSheets();},[]);
+  // Auto-sync on first load with small delay to ensure page is ready
+  useEffect(()=>{const t=setTimeout(()=>syncSheets(),800);return()=>clearTimeout(t);},[]);
   // Default date range: 7 months ago → prior month
   const defaultDates = useMemo(()=>{
     const now = new Date();
