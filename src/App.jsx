@@ -277,44 +277,6 @@ function MarginByPartnerChart({projects, activePartner}){
 }
 
 
-){
-  const partnerGroupFn = makePartnerGroupFn(activePartner);
-  const chartPartners = makeChartPartners(activePartner);
-  // Only named partners for this chart
-  const namedOnly = projects.filter(p=>IMAGE_METRIC_PARTNERS.includes(normalizePartner(p.partner)));
-  const months=[...new Set(namedOnly.map(p=>p.month))].filter(Boolean).sort();
-  const data=months.map(m=>{
-    const row={month:fmtMonth(m)};
-    chartPartners.forEach(pt=>{
-      const sub=namedOnly.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-      const totalBase=sub.reduce((s,p)=>s+(Number(p.expenses?.base)||0),0);
-      const count=sub.length;
-      row[pt]=count>0?totalBase/count:0;
-    });
-    return row;
-  });
-  const active=chartPartners.filter(pt=>data.some(r=>r[pt]>0));
-  return(
-    <div style={S.chartCard}>
-      <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Avg Base Rate Expense by Partner</div>
-        <div style={S.chartSub}>Monthly average base expense per project · named partners only</div>
-      </div>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
-          <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-
 // ─── Chart 7: Avg Revenue per Approval by Partner by Month ───────────────────
 function AvgRevenuePerApprovalChart({projects, activePartner}){
   const partnerGroupFn = makePartnerGroupFn(activePartner);
