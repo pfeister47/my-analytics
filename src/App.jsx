@@ -171,90 +171,7 @@ function RevenueByPartnerChart({projects, activePartner}){
   );
 }
 
-// ─── Shared helper: build expense-per-image data ─────────────────────────────
-function useExpPerImageData(projects){
-  // Key by "product|||partner" to handle same product name across different partners
-  const comboCounts={}, comboMeta={};
-  projects.filter(p=>EXP_IMAGE_CHART_PARTNERS.includes(normalizePartner(p.partner))).forEach(p=>{
-    const norm=normalizePartner(p.partner);
-    const key=`${p.product}|||${norm}`;
-    comboCounts[key]=(comboCounts[key]||0)+1;
-    comboMeta[key]={product:p.product, partner:norm};
-  });
-  const top10keys=Object.entries(comboCounts)
-    .filter(([,c])=>c>=10)
-    .sort((a,b)=>b[1]-a[1])
-    .slice(0,10)
-    .map(([k])=>k);
-  // Sort: group by partner then alphabetically by product
-  top10keys.sort((a,b)=>{
-    const ma=comboMeta[a], mb=comboMeta[b];
-    return ma.partner.localeCompare(mb.partner)||ma.product.localeCompare(mb.product);
-  });
-  const data=top10keys.map(key=>{
-    const {product,partner}=comboMeta[key];
-    const sub=projects.filter(p=>p.product===product&&normalizePartner(p.partner)===partner);
-    // Deduplicate images by projectId — each project only counted once across months
-    const seenIds=new Set();
-    const imgs=sub.reduce((s,p)=>{
-      const pid=p.projectId||p.id;
-      if(seenIds.has(pid)) return s;
-      seenIds.add(pid);
-      return s+Number(p.numImages);
-    },0);
-    if(!imgs) return null;
-    const core=sub.reduce((s,p)=>s+Number(p.expenses.base)+Number(p.expenses.additionalDeliverables),0);
-    const vari=sub.reduce((s,p)=>s+Number(p.expenses.lastMinuteReschedule)+Number(p.expenses.travel)+Number(p.expenses.other),0);
-    const total=core+vari;
-    return{
-      key, product, partner,
-      "Core (Base + Add.Deliv.)": core/imgs,
-      "Variable (LMR + Travel + Other)": vari/imgs,
-      "Core %": total>0?(core/total)*100:0,
-      "Variable %": total>0?(vari/total)*100:0,
-    };
-  }).filter(Boolean);
-  return {data};
-}
-
-// ─── Stable X tick for expense charts (defined outside component to avoid remount) ──
-const ExpProductTick=({x,y,payload,data})=>{
-  const item=data?.find(d=>d.key===payload.value);
-  return(
-    <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={14} textAnchor="middle" fill={C.muted} fontSize={10} fontFamily="Space Mono">{item?.product||payload.value}</text>
-      <text x={0} y={0} dy={26} textAnchor="middle" fill={C.muted} fontSize={9} fontFamily="Space Mono" opacity={0.7}>{item?.partner||""}</text>
-    </g>
-  );
-};
-
-// ─── Chart 2a: Expense per Image by Product (absolute $) ─────────────────────
-function ExpensePerImageChart({projects}){
-  const {data}=useExpPerImageData(projects);
-  const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
-  return(
-    <div style={S.chartCard}>
-      <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Expense per Image by Product</div>
-        <div style={S.chartSub}>Top 10 products ≥10 projects · grouped by partner · Core vs variable cost per image</div>
-      </div>
-      <ResponsiveContainer width="100%" height={360}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={bs}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="key" tick={<ExpProductTick data={data}/>} axisLine={false} tickLine={false} interval={0}/>
-          <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
-          <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          <Bar dataKey="Core (Base + Add.Deliv.)" stackId="a" fill={C.accent} radius={[0,0,0,0]}/>
-          <Bar dataKey="Variable (LMR + Travel + Other)" stackId="a" fill={C.yellow} radius={[4,4,0,0]}/>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-// ─── Chart 2b: Expense Mix by Product — 100% stacked ─────────────────────────
-function ExpensePerImagePctChart({projects}){
+){
   const {data}=useExpPerImageData(projects);
   const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
   return(
@@ -278,7 +195,7 @@ function ExpensePerImagePctChart({projects}){
   );
 }
 
-// ─── Chart 3: Travel Expenses by Partner by Month ─────────────────────────────
+// ─── Chart 3: Avg Travel Expense per Approval by Partner by Month ────────────
 function TravelExpenseChart({projects, activePartner}){
   const partnerGroupFn = makePartnerGroupFn(activePartner);
   const chartPartners = makeChartPartners(activePartner);
@@ -286,7 +203,9 @@ function TravelExpenseChart({projects, activePartner}){
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
     chartPartners.forEach(pt=>{
-      row[pt]=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt).reduce((s,p)=>s+(Number(p.expenses?.travel)||0),0);
+      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+      const total=sub.reduce((s,p)=>s+(Number(p.expenses?.travel)||0),0);
+      row[pt]=sub.length>0?total/sub.length:0;
     });
     return row;
   });
@@ -294,15 +213,15 @@ function TravelExpenseChart({projects, activePartner}){
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Travel Expenses by Partner</div>
-        <div style={S.chartSub}>Monthly travel costs by partner</div>
+        <div style={S.chartTitle}>Avg Travel Expense per Approval</div>
+        <div style={S.chartSub}>Monthly average travel cost per project approval by partner</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20, Math.min(60, Math.floor(600/Math.max(data.length,1))))}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <Tooltip content={<ChartTooltip/>}/>
+          <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
+          <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
           {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
         </BarChart>
@@ -311,7 +230,7 @@ function TravelExpenseChart({projects, activePartner}){
   );
 }
 
-// ─── Chart 5: Last Minute Reschedule Expenses by Partner by Month ────────────
+// ─── Chart 5: Avg LMR Expense per Approval by Partner by Month ───────────────
 function LMRExpenseChart({projects, activePartner}){
   const partnerGroupFn = makePartnerGroupFn(activePartner);
   const chartPartners = makeChartPartners(activePartner);
@@ -319,7 +238,9 @@ function LMRExpenseChart({projects, activePartner}){
   const data=months.map(m=>{
     const row={month:fmtMonth(m)};
     chartPartners.forEach(pt=>{
-      row[pt]=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt).reduce((s,p)=>s+(Number(p.expenses?.lastMinuteReschedule)||0),0);
+      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+      const total=sub.reduce((s,p)=>s+(Number(p.expenses?.lastMinuteReschedule)||0),0);
+      row[pt]=sub.length>0?total/sub.length:0;
     });
     return row;
   });
@@ -327,15 +248,15 @@ function LMRExpenseChart({projects, activePartner}){
   return(
     <div style={S.chartCard}>
       <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Last Minute Reschedule Expenses</div>
-        <div style={S.chartSub}>Monthly LMR costs by partner</div>
+        <div style={S.chartTitle}>Avg LMR Expense per Approval</div>
+        <div style={S.chartSub}>Monthly average last minute reschedule cost per project approval by partner</div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <Tooltip content={<ChartTooltip/>}/>
+          <YAxis tickFormatter={v=>`$${v.toFixed(1)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
+          <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
           {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
         </BarChart>
@@ -379,8 +300,7 @@ function MarginByPartnerChart({projects, activePartner}){
 }
 
 
-// ─── Chart 6: Avg Base Rate Expense by Partner by Month ──────────────────────
-function AvgBaseRateChart({projects, activePartner}){
+){
   const partnerGroupFn = makePartnerGroupFn(activePartner);
   const chartPartners = makeChartPartners(activePartner);
   // Only named partners for this chart
@@ -408,6 +328,77 @@ function AvgBaseRateChart({projects, activePartner}){
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <YAxis tickFormatter={v=>v>=1000?`$${v/1000}k`:`$${v}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
+          <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
+          <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
+          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+
+// ─── Chart 7: Avg Revenue per Approval by Partner by Month ───────────────────
+function AvgRevenuePerApprovalChart({projects, activePartner}){
+  const partnerGroupFn = makePartnerGroupFn(activePartner);
+  const chartPartners = makeChartPartners(activePartner);
+  const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
+  const data=months.map(m=>{
+    const row={month:fmtMonth(m)};
+    chartPartners.forEach(pt=>{
+      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+      const total=sub.reduce((s,p)=>s+totalRev(p),0);
+      row[pt]=sub.length>0?total/sub.length:0;
+    });
+    return row;
+  });
+  const active=chartPartners.filter(pt=>data.some(r=>r[pt]>0));
+  return(
+    <div style={S.chartCard}>
+      <div style={S.chartHeader}>
+        <div style={S.chartTitle}>Avg Revenue per Approval</div>
+        <div style={S.chartSub}>Monthly average revenue per project approval by partner</div>
+      </div>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
+          <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+          <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
+          <YAxis tickFormatter={v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${v.toFixed(0)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
+          <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
+          <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
+          {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── Chart 8: Avg Margin per Approval by Partner by Month ────────────────────
+function AvgMarginPerApprovalChart({projects, activePartner}){
+  const partnerGroupFn = makePartnerGroupFn(activePartner);
+  const chartPartners = makeChartPartners(activePartner);
+  const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
+  const data=months.map(m=>{
+    const row={month:fmtMonth(m)};
+    chartPartners.forEach(pt=>{
+      const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
+      const total=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
+      row[pt]=sub.length>0?total/sub.length:0;
+    });
+    return row;
+  });
+  const active=chartPartners.filter(pt=>data.some(r=>r[pt]!==0));
+  return(
+    <div style={S.chartCard}>
+      <div style={S.chartHeader}>
+        <div style={S.chartTitle}>Avg Margin per Approval</div>
+        <div style={S.chartSub}>Monthly average margin per project approval by partner</div>
+      </div>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
+          <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
+          <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
+          <YAxis tickFormatter={v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${v.toFixed(0)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
           {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
@@ -707,13 +698,12 @@ export default function App(){
             <RevenueByPartnerChart projects={filtered} activePartner={filters.partner}/>
             <MarginByPartnerChart projects={filtered} activePartner={filters.partner}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+              <AvgRevenuePerApprovalChart projects={filtered} activePartner={filters.partner}/>
+              <AvgMarginPerApprovalChart projects={filtered} activePartner={filters.partner}/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
               <TravelExpenseChart projects={filtered} activePartner={filters.partner}/>
               <LMRExpenseChart projects={filtered} activePartner={filters.partner}/>
-            </div>
-            <AvgBaseRateChart projects={filtered} activePartner={filters.partner}/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-              <ExpensePerImageChart projects={filtered}/>
-              <ExpensePerImagePctChart projects={filtered}/>
             </div>
           </div>
         )}
