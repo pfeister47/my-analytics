@@ -171,29 +171,6 @@ function RevenueByPartnerChart({projects, activePartner}){
   );
 }
 
-){
-  const {data}=useExpPerImageData(projects);
-  const bs=Math.max(24,Math.min(80,Math.floor(700/Math.max(data.length,1))));
-  return(
-    <div style={S.chartCard}>
-      <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Expense Mix by Product</div>
-        <div style={S.chartSub}>Core vs variable as % of total expense per image</div>
-      </div>
-      <ResponsiveContainer width="100%" height={360}>
-        <BarChart data={data} margin={{top:10,right:20,left:0,bottom:40}} barSize={bs}>
-          <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
-          <XAxis dataKey="key" tick={<ExpProductTick data={data}/>} axisLine={false} tickLine={false} interval={0}/>
-          <YAxis tickFormatter={v=>`${v.toFixed(0)}%`} domain={[0,100]} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <Tooltip content={<ChartTooltip valueFormatter={v=>`${Number(v).toFixed(1)}%`}/>}/>
-          <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
-          <Bar dataKey="Core %" stackId="a" fill={C.accent} radius={[0,0,0,0]}/>
-          <Bar dataKey="Variable %" stackId="a" fill={C.yellow} radius={[4,4,0,0]}/>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
 
 // ─── Chart 3: Avg Travel Expense per Approval by Partner by Month ────────────
 function TravelExpenseChart({projects, activePartner}){
