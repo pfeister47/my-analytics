@@ -3,12 +3,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
-  bg:"#080c14", surface:"#0f1623", card:"#131d2e", border:"#1c2a3d", borderHover:"#2a3f5a",
-  text:"#dce8f5", muted:"#4a6080", accent:"#00d9c0", accentDim:"#00d9c015",
-  red:"#ff5c6a", yellow:"#ffc542", purple:"#9b7fe8", blue:"#4da6ff", green:"#00d9c0",
-  orange:"#ff9d5c",
+  bg:"#f4f6f9", surface:"#ffffff", card:"#ffffff", border:"#dde3ed", borderHover:"#b0bdd0",
+  text:"#1a2333", muted:"#6b7c99", accent:"#0099a8", accentDim:"#0099a815",
+  red:"#e0334c", yellow:"#d4890a", purple:"#6b4fc8", blue:"#1a6fd4", green:"#0d9e6e",
+  orange:"#d4610a",
 };
-const PARTNER_COLORS = ["#00d9c0","#9b7fe8","#ff5c6a","#ffc542","#4da6ff","#ff9d5c","#80e882"];
+const PARTNER_COLORS = ["#0099a8","#6b4fc8","#e0334c","#d4890a","#1a6fd4","#d4610a","#0d9e6e"];
 
 // ─── Named partners — all others become "Other" ───────────────────────────────
 const NAMED_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
@@ -55,11 +55,11 @@ const makeChartPartners = (activePartnerFilter) => {
 };
 
 const CHART_PARTNER_COLORS = {
-  "Uber Eats":     "#00d9c0",
-  "Uber Eats ANZ": "#9b7fe8",
-  "Deliveroo":     "#ff5c6a",
-  "GrubHub":       "#ffc542",
-  "Other":         "#4a6080",
+  "Uber Eats":     "#0099a8",
+  "Uber Eats ANZ": "#6b4fc8",
+  "Deliveroo":     "#e0334c",
+  "GrubHub":       "#d4890a",
+  "Other":         "#6b7c99",
 };
 const getPartnerColor = (name, i) => CHART_PARTNER_COLORS[name] || PARTNER_COLORS[i % PARTNER_COLORS.length];
 
@@ -340,6 +340,7 @@ function AvgRevenuePerApprovalChart({projects, activePartner}){
 
 // ─── Chart 8: Avg Margin per Approval by Partner by Month ────────────────────
 function AvgMarginPerApprovalChart({projects, activePartner}){
+  const [showPct, setShowPct] = useState(false);
   const isFiltered = activePartner && activePartner !== "All";
   const months=[...new Set(projects.map(p=>p.month))].filter(Boolean).sort();
   const data=months.map(m=>{
@@ -348,31 +349,58 @@ function AvgMarginPerApprovalChart({projects, activePartner}){
       const partnerGroupFn=makePartnerGroupFn(activePartner);
       makeChartPartners(activePartner).forEach(pt=>{
         const sub=projects.filter(p=>p.month===m&&partnerGroupFn(p.partner)===pt);
-        const val=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
+        const rev=sub.reduce((s,p)=>s+totalRev(p),0);
+        const margin=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
         const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
-        row[pt]=approvals>0?val/approvals:0;
+        if(showPct){
+          row[pt]=approvals>0&&rev>0?(margin/rev)*100:0;
+        } else {
+          row[pt]=approvals>0?margin/approvals:0;
+        }
       });
     } else {
       const sub=projects.filter(p=>p.month===m);
-      const val=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
+      const rev=sub.reduce((s,p)=>s+totalRev(p),0);
+      const margin=sub.reduce((s,p)=>s+totalRev(p)-totalExp(p),0);
       const approvals=sub.reduce((s,p)=>s+(Number(p.approvals)||0),0);
-      row["Company-wide"]=approvals>0?val/approvals:0;
+      if(showPct){
+        row["Company-wide"]=rev>0?(margin/rev)*100:0;
+      } else {
+        row["Company-wide"]=approvals>0?margin/approvals:0;
+      }
     }
     return row;
   });
   const active=isFiltered ? makeChartPartners(activePartner).filter(pt=>data.some(r=>r[pt]!==0)) : ["Company-wide"];
+  const yFmt = showPct
+    ? v=>`${v.toFixed(1)}%`
+    : v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${v.toFixed(0)}`;
+  const tooltipFmt = showPct ? v=>`${Number(v).toFixed(1)}%` : fmtD;
+  const toggleStyle = active => ({
+    background: active ? C.accent : "transparent",
+    color: active ? "#fff" : C.muted,
+    border: `1px solid ${active ? C.accent : C.border}`,
+    borderRadius:6, padding:"3px 10px", cursor:"pointer",
+    fontSize:11, fontFamily:"'Space Mono',monospace", fontWeight: active?700:400,
+  });
   return(
     <div style={S.chartCard}>
-      <div style={S.chartHeader}>
-        <div style={S.chartTitle}>Avg Margin per Approval</div>
-        <div style={S.chartSub}>Monthly average margin per approval</div>
+      <div style={{...S.chartHeader, display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
+        <div>
+          <div style={S.chartTitle}>Avg Margin per Approval</div>
+          <div style={S.chartSub}>{showPct ? "Monthly average margin % per approval" : "Monthly average margin $ per approval"}</div>
+        </div>
+        <div style={{display:"flex",gap:4}}>
+          <button style={toggleStyle(!showPct)} onClick={()=>setShowPct(false)}>$</button>
+          <button style={toggleStyle(showPct)} onClick={()=>setShowPct(true)}>%</button>
+        </div>
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{top:10,right:10,left:0,bottom:0}} barSize={Math.max(20,Math.min(60,Math.floor(600/Math.max(data.length,1))))}>
           <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false}/>
           <XAxis dataKey="month" tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <YAxis tickFormatter={v=>v>=1000?`$${(v/1000).toFixed(1)}k`:`$${v.toFixed(0)}`} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
-          <Tooltip content={<ChartTooltip valueFormatter={fmtD}/>}/>
+          <YAxis tickFormatter={yFmt} tick={{fill:C.muted,fontSize:11,fontFamily:"Space Mono"}} axisLine={false} tickLine={false}/>
+          <Tooltip content={<ChartTooltip valueFormatter={tooltipFmt}/>}/>
           <Legend wrapperStyle={{paddingTop:16,fontSize:12,fontFamily:"DM Sans"}} formatter={v=><span style={{color:C.text}}>{v}</span>}/>
           {active.map((pt,i)=><Bar key={pt} dataKey={pt} stackId="a" fill={getPartnerColor(pt,i)} radius={i===active.length-1?[3,3,0,0]:[0,0,0,0]}/>)}
         </BarChart>
@@ -565,7 +593,7 @@ export default function App(){
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 
       {/* Nav */}
-      <div style={{borderBottom:`1px solid ${C.border}`,padding:"0 28px",display:"flex",alignItems:"center",justifyContent:"space-between",height:58,position:"sticky",top:0,zIndex:50,background:`${C.bg}ee`,backdropFilter:"blur(10px)"}}>
+      <div style={{borderBottom:`1px solid ${C.border}`,padding:"0 28px",display:"flex",alignItems:"center",justifyContent:"space-between",height:58,position:"sticky",top:0,zIndex:50,background:`${C.bg}f8`,backdropFilter:"blur(8px)"}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:30,height:30,background:`linear-gradient(135deg,${C.accent},${C.purple})`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:"#060c14"}}>▲</div>
           <span style={{fontWeight:700,fontSize:16,letterSpacing:-0.3,fontFamily:"'DM Sans',sans-serif"}}>Revenue Analytics</span>
