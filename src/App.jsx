@@ -11,15 +11,16 @@ const C = {
 const PARTNER_COLORS = ["#0099a8","#6b4fc8","#e0334c","#d4890a","#1a6fd4","#d4610a","#0d9e6e"];
 
 // ─── Named partners — all others become "Other" ───────────────────────────────
-const NAMED_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
+const NAMED_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub", "DoorDash"];
 // Partners included in Rev/Image and Exp/Image KPI cards
-const IMAGE_METRIC_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub", "ezCater", "Popmenu"];
+const IMAGE_METRIC_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub", "DoorDash", "ezCater", "Popmenu"];
 // Partners included in Expense per Image chart
-const EXP_IMAGE_CHART_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub"];
+const EXP_IMAGE_CHART_PARTNERS = ["Uber Eats", "Uber Eats ANZ", "Deliveroo", "GrubHub", "DoorDash"];
 
 // Case-insensitive partner name normalization — handles "Grubhub" vs "GrubHub" etc.
 const PARTNER_ALIASES = {
   "grubhub": "GrubHub",
+  "doordash": "DoorDash",
   "uber eats": "Uber Eats",
   "uber eats anz": "Uber Eats ANZ",
   "deliveroo": "Deliveroo",
@@ -34,24 +35,24 @@ const normalizePartner = name => {
 // Determine how to show a partner in charts:
 // - If a specific partner filter is active and it's not in NAMED_PARTNERS, show that partner name
 // - Otherwise group non-named partners as "Other"
-const makePartnerGroupFn = (activePartnerFilter) => {
-  if (activePartnerFilter && activePartnerFilter !== "All" && !NAMED_PARTNERS.includes(activePartnerFilter)) {
+const makePartnerGroupFn = (activePartnerFilter, namedList=NAMED_PARTNERS) => {
+  if (activePartnerFilter && activePartnerFilter !== "All" && !namedList.includes(activePartnerFilter)) {
     return p => {
       const n = normalizePartner(p);
-      return n === activePartnerFilter ? activePartnerFilter : (NAMED_PARTNERS.includes(n) ? n : "Other");
+      return n === activePartnerFilter ? activePartnerFilter : (namedList.includes(n) ? n : "Other");
     };
   }
   return p => {
     const n = normalizePartner(p);
-    return NAMED_PARTNERS.includes(n) ? n : "Other";
+    return namedList.includes(n) ? n : "Other";
   };
 };
 
-const makeChartPartners = (activePartnerFilter) => {
-  if (activePartnerFilter && activePartnerFilter !== "All" && !NAMED_PARTNERS.includes(activePartnerFilter)) {
-    return [...NAMED_PARTNERS, activePartnerFilter, "Other"];
+const makeChartPartners = (activePartnerFilter, namedList=NAMED_PARTNERS) => {
+  if (activePartnerFilter && activePartnerFilter !== "All" && !namedList.includes(activePartnerFilter)) {
+    return [...namedList, activePartnerFilter, "Other"];
   }
-  return [...NAMED_PARTNERS, "Other"];
+  return [...namedList, "Other"];
 };
 
 const CHART_PARTNER_COLORS = {
@@ -59,6 +60,7 @@ const CHART_PARTNER_COLORS = {
   "Uber Eats ANZ": "#6b4fc8",
   "Deliveroo":     "#e0334c",
   "GrubHub":       "#d4890a",
+  "DoorDash":      "#ff3008",
   "Other":         "#6b7c99",
 };
 const getPartnerColor = (name, i) => CHART_PARTNER_COLORS[name] || PARTNER_COLORS[i % PARTNER_COLORS.length];
