@@ -415,7 +415,7 @@ function AvgMarginPerApprovalChart({projects, activePartner}){
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/1JmvTv2QP1INdgvLIAoYBlnevvQKDmvnjsDxHyjQPTPg/edit";
 // ─── Google Apps Script web app URL (replaces /api/sheets) ──────────────────
 // After deploying Code.gs as a web app, paste the deployment URL here:
-const APPS_SCRIPT_URL = "https://script.google.com/a/macros/smartshoot.com/s/AKfycby4-tMZIVUbYQWXIAnHJhbFSD72u1Z2Cii0P-urOMf3Gn0JQzIU4Dx5Ps-vk6v9Gm4/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby4-tMZIVUbYQWXlAnHJhbFSD72u1Z2Cii0P-urOMf3Gn0JQzlU4Dx5Ps-vk6v9Gm4/exec";
 
 // ─── Grouped Analysis ─────────────────────────────────────────────────────────
 function GroupedAnalysis({data,groupBy}){
