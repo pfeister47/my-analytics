@@ -413,6 +413,9 @@ function AvgMarginPerApprovalChart({projects, activePartner}){
 
 // ─── Hardcoded Sheet URL ────────────────────────────────────────────
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/1JmvTv2QP1INdgvLIAoYBlnevvQKDmvnjsDxHyjQPTPg/edit";
+// ─── Google Apps Script web app URL (replaces /api/sheets) ──────────────────
+// After deploying Code.gs as a web app, paste the deployment URL here:
+const APPS_SCRIPT_URL = "https://script.google.com/a/macros/smartshoot.com/s/AKfycby4-tMZIVUbYQWXIAnHJhbFSD72u1Z2Cii0P-urOMf3Gn0JQzIU4Dx5Ps-vk6v9Gm4/exec";
 
 // ─── Grouped Analysis ─────────────────────────────────────────────────────────
 function GroupedAnalysis({data,groupBy}){
@@ -548,10 +551,10 @@ export default function App(){
   const syncSheets=async()=>{
     setSyncing(true);setSyncError(null);
     try{
-      const res=await fetch("/api/sheets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sheetUrl:SHEET_URL})});
+      const res=await fetch(APPS_SCRIPT_URL);
       const data=await res.json();
-      if(!res.ok) throw new Error(data.error||"Unknown error");
-      handleImport(data.projects);
+      if(data.error) throw new Error(data.error);
+      handleImport(Array.isArray(data)?data:data.projects||[]);
     }catch(e){setSyncError(e.message);}
     finally{setSyncing(false);}
   };
